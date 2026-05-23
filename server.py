@@ -9,7 +9,7 @@ from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-app = Flask(__name__, static_folder='.')
+app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
 CORS(app)
 
 DATABASE_URL = (
@@ -312,7 +312,10 @@ def get_logs():
 def index():
     return send_from_directory('.', 'index.html')
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print(f'init_db error: {e}')
 
 if __name__ == '__main__':
     print('G-TAP v2 running at http://localhost:5000')
