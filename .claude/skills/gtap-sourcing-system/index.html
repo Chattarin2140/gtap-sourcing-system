@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G-TAP Sourcing Request System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+:root {
+  --navy:#1a3a5c; --navy-dk:#0f2640; --navy-lt:#e8f1f8;
+  --accent:#2563eb; --success:#0b6e4f; --danger:#c0392b; --warning:#b45309;
+  --bg:#f0f4f8; --card:#fff; --sidebar:#1a2942; --text:#1e293b; --muted:#64748b;
+  --border:#e2e8f0; --radius:8px; --radius-lg:12px;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 16px rgba(0,0,0,.1);
+  --sw:230px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#0f2640 0%,#1a3a5c 50%,#2563eb 100%);display:flex;align-items:center;justify-content:center;z-index:9999}
+.login-box{background:#fff;border-radius:16px;padding:40px 36px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-logo{text-align:center;margin-bottom:28px}
+.login-logo .badge{display:inline-block;background:#2563eb;color:#fff;font-size:12px;font-weight:700;padding:4px 12px;border-radius:6px;letter-spacing:1px;margin-bottom:8px}
+.login-logo h2{font-size:18px;font-weight:700;color:#1e293b}
+.login-logo p{font-size:12px;color:#64748b;margin-top:4px}
+.login-field{margin-bottom:14px}
+.login-field label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px}
+.login-field input{width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;transition:border-color .15s}
+.login-field input:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.login-btn{width:100%;padding:11px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:6px;transition:background .15s}
+.login-btn:hover{background:#1d4ed8}
+.login-err{background:#fee2e2;color:#991b1b;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:12px;display:none}
+.login-accounts{margin-top:18px;padding:12px;background:#f8fafc;border-radius:8px;font-size:11px;color:#64748b}
+.login-accounts b{display:block;margin-bottom:6px;color:#475569}
+.acc-row{display:flex;justify-content:space-between;padding:2px 0}
+
+/* APP */
+#app{display:none;height:100vh;overflow:hidden}
+.layout{display:flex;height:100%}
+
+/* SIDEBAR */
+.sidebar{width:var(--sw);background:var(--sidebar);color:#fff;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sb-logo{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-badge{display:inline-block;background:#2563eb;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;letter-spacing:1px;margin-bottom:6px}
+.sb-logo h1{font-size:13px;font-weight:600;line-height:1.4}
+.sb-logo p{font-size:10px;color:rgba(255,255,255,.4);margin-top:2px}
+.sb-user{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:8px}
+.sb-avatar{width:30px;height:30px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.sb-user-info{flex:1;min-width:0}
+.sb-user-name{font-size:12px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-user-role{font-size:10px;color:rgba(255,255,255,.45)}
+.sb-logout{background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;padding:2px;font-size:14px}
+.sb-logout:hover{color:#fff}
+.sb-nav{flex:1;padding:10px 8px}
+.sb-label{font-size:10px;font-weight:600;color:rgba(255,255,255,.3);letter-spacing:1px;text-transform:uppercase;padding:10px 8px 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.6);transition:all .15s;margin-bottom:1px;user-select:none}
+.nav-item i{font-size:15px;flex-shrink:0}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-item.active{background:#2563eb;color:#fff;font-weight:500}
+.nav-badge{margin-left:auto;background:rgba(255,255,255,.15);color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px}
+.nav-item.active .nav-badge{background:rgba(255,255,255,.25)}
+.sb-footer{padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:10px;color:rgba(255,255,255,.3)}
+
+/* MAIN */
+.main-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 22px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:var(--shadow);z-index:10}
+.topbar-title{font-size:15px;font-weight:600}
+.topbar-sub{font-size:11px;color:var(--muted)}
+.topbar-right{display:flex;gap:8px;align-items:center}
+.main-content{flex:1;overflow-y:auto;padding:20px}
+
+/* PAGES */
+.page{display:none}
+.page.active{display:block}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow);margin-bottom:14px}
+.card-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px}
+.card-title i{font-size:15px}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;position:relative;overflow:hidden}
+.stat::after{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.stat.blue::after{background:#2563eb}.stat.amber::after{background:#f59e0b}
+.stat.green::after{background:#10b981}.stat.purple::after{background:#7c3aed}
+.stat-ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;margin-bottom:8px}
+.stat-ico.blue{background:#eff6ff;color:#2563eb}.stat-ico.amber{background:#fffbeb;color:#f59e0b}
+.stat-ico.green{background:#ecfdf5;color:#10b981}.stat-ico.purple{background:#f5f3ff;color:#7c3aed}
+.stat-val{font-size:24px;font-weight:700;line-height:1}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* CHARTS */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.chart-wrap{position:relative;height:220px}
+
+/* FORM */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-grid.c3{grid-template-columns:1fr 1fr 1fr}
+.form-grid.c4{grid-template-columns:1fr 1fr 1fr 1fr}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg.full{grid-column:1/-1}
+.lbl{font-size:11px;font-weight:600;color:var(--muted)}
+.req{color:var(--danger)}
+input[type=text],input[type=email],input[type=date],input[type=number],input[type=password],select,textarea{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text);background:#fff;width:100%;transition:border-color .15s;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+input.err,select.err{border-color:var(--danger)}
+input[readonly]{background:#f8fafc;color:var(--muted)}
+textarea{resize:vertical;min-height:60px}
+.cb-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:3px}
+.cbi{display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer}
+.cbi input{width:14px;height:14px;accent-color:var(--accent)}
+.type-2col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.tg-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.cb-col{display:flex;flex-direction:column;gap:6px}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+thead th{background:#f8fafc;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.2px}
+tbody td{padding:6px 10px;border-bottom:1px solid var(--border)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#f8fafc}
+td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60px}
+.nc{text-align:center;font-weight:600;color:var(--muted)}
+
+/* BTN */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text);transition:all .15s;white-space:nowrap;font-family:inherit}
+.btn:hover{background:var(--bg)}
+.btn:active{transform:scale(.98)}
+.btn i{font-size:15px}
+.btn-primary{background:var(--navy);color:#fff;border-color:var(--navy)}.btn-primary:hover{background:var(--navy-dk)}
+.btn-accent{background:var(--accent);color:#fff;border-color:var(--accent)}.btn-accent:hover{background:#1d4ed8}
+.btn-success{background:var(--success);color:#fff;border-color:var(--success)}.btn-success:hover{background:#085c40}
+.btn-danger{color:var(--danger);border-color:#fca5a5}.btn-danger:hover{background:#fef2f2}
+.btn-warning{background:#f59e0b;color:#fff;border-color:#f59e0b}.btn-warning:hover{background:#d97706}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-icon{padding:6px 8px}
+.abar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap}
+.abar-r{display:flex;gap:8px;align-items:center}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 8px;border-radius:100px}
+.b-pending{background:#fef3c7;color:#92400e}.b-approved{background:#dcfce7;color:#166534}
+.b-rejected{background:#fee2e2;color:#991b1b}.b-admin{background:#dbeafe;color:#1e40af}
+.b-viewer{background:#f3e8ff;color:#6b21a8}
+
+/* REQUEST CARDS */
+.req-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:8px;border-left:3px solid var(--border);transition:border-color .15s,box-shadow .15s;cursor:pointer}
+.req-card:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
+.req-card.pending{border-left-color:#f59e0b}.req-card.approved{border-left-color:#10b981}.req-card.rejected{border-left-color:#ef4444}
+.rc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.rc-docno{font-size:14px;font-weight:700}
+.rc-actions{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.rc-meta{display:flex;flex-wrap:wrap;gap:10px}
+.meta{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--muted)}
+.meta i{font-size:13px}
+
+/* SEARCH */
+.search-wrap{position:relative;flex:1;min-width:180px}
+.search-wrap i{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;pointer-events:none}
+.search-wrap input{padding-left:32px}
+
+/* TOAST */
+#toasts{position:fixed;top:18px;right:18px;z-index:99999;display:flex;flex-direction:column;gap:8px}
+.toast{background:#1e293b;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:8px;animation:tin .2s ease}
+.toast.ok{background:var(--success)}.toast.err{background:var(--danger)}.toast.warn{background:#f59e0b}
+@keyframes tin{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* EMPTY */
+.empty{text-align:center;padding:40px;color:var(--muted)}
+.empty i{font-size:36px;display:block;margin-bottom:8px;opacity:.35}
+
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center;display:none}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:16px;padding:28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:16px}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+
+/* STATUS SELECT */
+.status-select{padding:4px 8px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid transparent}
+.status-select.Pending{background:#fef3c7;color:#92400e;border-color:#fde68a}
+.status-select.Approved{background:#dcfce7;color:#166534;border-color:#bbf7d0}
+.status-select.Rejected{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+
+/* USER MGMT */
+.user-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.user-row:last-child{border-bottom:none}
+.u-avatar{width:34px;height:34px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;flex-shrink:0}
+.u-info{flex:1}
+.u-name{font-size:13px;font-weight:600}
+.u-meta{font-size:11px;color:var(--muted)}
+
+/* ACTIVITY LOG */
+.log-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.log-item:last-child{border-bottom:none}
+.log-dot{width:8px;height:8px;border-radius:50%;background:#2563eb;flex-shrink:0;margin-top:5px}
+.log-dot.ok{background:#10b981}.log-dot.warn{background:#f59e0b}.log-dot.err{background:#ef4444}
+.log-text{font-size:12px;color:var(--text)}
+.log-time{font-size:11px;color:var(--muted);margin-top:2px}
+
+@media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}.charts-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.form-grid.c3,.form-grid.c4{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="badge">G-TAP</div>
+      <h2>Sourcing Request System</h2>
+      <p>กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ</p>
+    </div>
+    <div class="login-err" id="login-err">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>
+    <div class="login-field">
+      <label>Username / Email</label>
+      <input type="text" id="li-user" placeholder="username หรือ email" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <input type="password" id="li-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div class="login-accounts">
+      <b>Demo Accounts:</b>
+      <div class="acc-row"><span>admin / admin123</span><span class="badge b-admin">Admin</span></div>
+      <div class="acc-row"><span>buyer / buyer123</span><span class="badge b-viewer">Buyer</span></div>
+      <div class="acc-row"><span>viewer / view123</span><span class="badge" style="background:#f1f5f9;color:#475569">Viewer</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sb-logo">
+        <div class="sb-badge">G-TAP</div>
+        <h1>Sourcing Request<br>System</h1>
+        <p>ISO TS FM-PB30/PBA-A-09</p>
+      </div>
+      <div class="sb-user">
+        <div class="sb-avatar" id="sb-avatar">A</div>
+        <div class="sb-user-info">
+          <div class="sb-user-name" id="sb-uname">Admin</div>
+          <div class="sb-user-role" id="sb-urole">Administrator</div>
+        </div>
+        <button class="sb-logout" onclick="doLogout()" title="ออกจากระบบ"><i class="ti ti-logout"></i></button>
+      </div>
+      <nav class="sb-nav">
+        <div class="sb-label">Main</div>
+        <div class="nav-item active" id="nav-dash" onclick="showPage('dash')"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
+        <div class="nav-item" id="nav-new" onclick="showPage('new')"><i class="ti ti-file-plus"></i> New Request</div>
+        <div class="sb-label">Management</div>
+        <div class="nav-item" id="nav-hist" onclick="showPage('hist')"><i class="ti ti-history"></i> Request History <span class="nav-badge" id="nb-hist">0</span></div>
+        <div class="nav-item admin-only" id="nav-users" onclick="showPage('users')"><i class="ti ti-users"></i> User Management</div>
+        <div class="sb-label">Export</div>
+        <div class="nav-item" onclick="exportAll()"><i class="ti ti-file-spreadsheet"></i> Export Excel</div>
+        <div class="nav-item" onclick="exportPDFAll()"><i class="ti ti-file-type-pdf"></i> Export PDF</div>
+      </nav>
+      <div class="sb-footer">REV.07 &nbsp;|&nbsp; EFF. 15 Oct 2016</div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="main-wrap">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title" id="pg-title">Dashboard</div>
+          <div class="topbar-sub" id="pg-sub">ภาพรวมระบบ Sourcing Request</div>
+        </div>
+        <div class="topbar-right">
+          <button class="btn btn-success" onclick="exportAll()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+          <button class="btn btn-danger btn-sm" onclick="exportPDFAll()"><i class="ti ti-file-type-pdf"></i> PDF</button>
+          <button class="btn btn-primary" onclick="showPage('new')"><i class="ti ti-plus"></i> New Request</button>
+        </div>
+      </div>
+      <div class="main-content">
+
+        <!-- DASHBOARD -->
+        <div class="page active" id="page-dash">
+          <div class="stats-grid">
+            <div class="stat blue"><div class="stat-ico blue"><i class="ti ti-file-text"></i></div><div class="stat-val" id="s0">0</div><div class="stat-lbl">Total Requests</div></div>
+            <div class="stat amber"><div class="stat-ico amber"><i class="ti ti-clock"></i></div><div class="stat-val" id="s1">0</div><div class="stat-lbl">Pending</div></div>
+            <div class="stat green"><div class="stat-ico green"><i class="ti ti-check"></i></div><div class="stat-val" id="s2">0</div><div class="stat-lbl">Approved</div></div>
+            <div class="stat purple"><div class="stat-ico purple"><i class="ti ti-package"></i></div><div class="stat-val" id="s3">0</div><div class="stat-lbl">Total Items</div></div>
+          </div>
+          <div class="charts-grid">
+            <div class="card"><div class="card-title"><i class="ti ti-chart-pie"></i> Status Distribution</div><div class="chart-wrap"><canvas id="chart-status"></canvas></div></div>
+            <div class="card"><div class="card-title"><i class="ti ti-chart-bar"></i> Requests by Factory</div><div class="chart-wrap"><canvas id="chart-factory"></canvas></div></div>
+          </div>
+          <div class="charts-grid">
+            <div class="card"><div class="card-title"><i class="ti ti-chart-line"></i> Monthly Trend</div><div class="chart-wrap"><canvas id="chart-trend"></canvas></div></div>
+            <div class="card">
+              <div class="card-title"><i class="ti ti-activity"></i> Activity Log</div>
+              <div id="activity-log"><div class="empty"><i class="ti ti-list"></i><p>ยังไม่มีกิจกรรม</p></div></div>
+            </div>
+          </div>
+          <div class="card"><div class="card-title"><i class="ti ti-clock-hour-4"></i> Recent Requests</div><div id="dash-recent"></div></div>
+        </div>
+
+        <!-- NEW REQUEST -->
+        <div class="page" id="page-new">
+          <div class="card">
+            <div class="card-title"><i class="ti ti-id"></i> Header Information</div>
+            <div class="form-grid c4">
+              <div class="fg"><label class="lbl">Issue Date <span class="req">*</span></label><input type="date" id="f-iss"></div>
+              <div class="fg"><label class="lbl">Request Date <span class="req">*</span></label><input type="date" id="f-rdt"></div>
+              <div class="fg"><label class="lbl">Factory <span class="req">*</span></label>
+                <select id="f-fac"><option value="">-- Select --</option><option>TGT1</option><option>TGT2</option><option>TGT3</option><option>TGRT</option><option>PDO</option></select></div>
+              <div class="fg"><label class="lbl">Doc. No.</label><input type="text" id="f-doc" readonly></div>
+              <div class="fg"><label class="lbl">User Name <span class="req">*</span></label><input type="text" id="f-uname" placeholder="Ms.Firstname Lastname"></div>
+              <div class="fg"><label class="lbl">Department <span class="req">*</span></label><input type="text" id="f-dept" placeholder="เช่น PR30"></div>
+              <div class="fg"><label class="lbl">Section</label><input type="text" id="f-sec" placeholder="เช่น PRA"></div>
+              <div class="fg"><label class="lbl">Ext. No.</label><input type="text" id="f-ext" placeholder="เช่น 1124"></div>
+              <div class="fg full"><label class="lbl">E-Mail <span class="req">*</span></label><input type="email" id="f-email" placeholder="example@tgt.co.th"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="ti ti-list-check"></i> Reason of Order</div>
+            <div class="form-grid">
+              <div class="fg"><label class="lbl">Purpose</label>
+                <div class="cb-row"><label class="cbi"><input type="checkbox" id="f-pm"> Market Price</label><label class="cbi"><input type="checkbox" id="f-pp"> Purchase Product</label></div></div>
+              <div class="fg"><label class="lbl">Order Type</label>
+                <div class="cb-row">
+                  <label class="cbi"><input type="checkbox" id="f-ot1"> TGT/TGRT/PDO</label>
+                  <label class="cbi"><input type="checkbox" id="f-ot2"> TGAS/PPA</label>
+                  <label class="cbi"><input type="checkbox" id="f-ot3"> BOI</label>
+                  <label class="cbi"><input type="checkbox" id="f-ot4"> ODC</label>
+                </div>
+              </div>
+              <div class="fg full"><label class="lbl">Purpose Description</label><textarea id="f-pdesc" placeholder="อธิบายวัตถุประสงค์..."></textarea></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="ti ti-tag"></i> Product Type</div>
+            <div class="type-2col">
+              <div>
+                <div class="tg-label"><i class="ti ti-car"></i> Automotive Group</div>
+                <div class="cb-col">
+                  <label class="cbi"><input type="checkbox" name="pt" value="New Model"> New Model</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Modify/ECI"> Modify/ECI, QE MEMO</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Mold"> Mold</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Jig&CF"> Jig &amp; CF</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="TGT Pay (11603)"> TGT Pay (11603)</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Customer Pay (11603)"> Customer Pay (11603)</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Amortization (12603)"> Amortization (12603)</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Mass Production (66302)"> Mass Production (66302)</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Auto-Part (66202)"> Auto-Part (66202)</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Material&Chemical (66203)"> Material &amp; Chemical (66203)</label>
+                </div>
+              </div>
+              <div>
+                <div class="tg-label"><i class="ti ti-building-factory"></i> Non-Automotive Group</div>
+                <div class="cb-col">
+                  <label class="cbi"><input type="checkbox" name="pt" value="Machine"> Machine</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Construction"> Construction</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Spare Part"> Spare Part</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Repair/Modify"> Repair / Modify</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Tool/Equipment"> Tool / Equipment</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Stationary"> Stationary</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Package"> Package</label>
+                  <label class="cbi"><input type="checkbox" name="pt" value="Other"> Other</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="abar">
+              <div class="card-title" style="margin:0;border:none;padding:0"><i class="ti ti-table"></i> Product Detail</div>
+              <button class="btn btn-accent btn-sm" onclick="addRow()"><i class="ti ti-plus"></i> Add Item</button>
+            </div>
+            <div class="tbl-wrap">
+              <table><thead><tr>
+                <th>No.</th><th>Model</th><th>Product No.</th><th>Product Name</th><th>Qty</th><th>Unit</th>
+                <th>Budget No.</th><th>GTAP Code</th><th>GTAP Name</th><th>P/O</th><th>Sup. Code</th>
+                <th>Supplier Name</th><th>Lead Time</th><th>Currency</th><th>Price</th><th>MOQ</th><th>Remark</th><th></th>
+              </tr></thead>
+              <tbody id="prod-body">
+                <tr id="empty-row"><td colspan="18" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>
+              </tbody></table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="ti ti-notes"></i> Remark &amp; Payment</div>
+            <div class="form-grid c3">
+              <div class="fg full"><label class="lbl">Remark</label><textarea id="f-rmk" placeholder="หมายเหตุ..."></textarea></div>
+              <div class="fg"><label class="lbl">Payment</label>
+                <select id="f-pay"><option value="">-- Select --</option><option>30 Days</option><option>45 Days</option><option>60 Days</option><option>Cash</option><option>L/C</option><option>T/T</option></select></div>
+              <div class="fg"><label class="lbl">Status</label>
+                <select id="f-sta"><option value="Pending">Pending</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option></select></div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:30px">
+            <button class="btn" onclick="clearForm()"><i class="ti ti-refresh"></i> Clear</button>
+            <button class="btn btn-primary" onclick="submitReq()"><i class="ti ti-send"></i> Submit Request</button>
+          </div>
+        </div>
+
+        <!-- HISTORY -->
+        <div class="page" id="page-hist">
+          <div class="abar" style="margin-bottom:14px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;flex:1">
+              <div class="search-wrap"><i class="ti ti-search"></i><input type="text" id="sq" placeholder="ค้นหา Doc.No., ชื่อ, แผนก..." oninput="renderHist()"></div>
+              <select id="fs" onchange="renderHist()" style="width:130px"><option value="">All Status</option><option>Pending</option><option>Approved</option><option>Rejected</option></select>
+              <select id="ff" onchange="renderHist()" style="width:110px"><option value="">All Factory</option><option>TGT1</option><option>TGT2</option><option>TGT3</option><option>TGRT</option><option>PDO</option></select>
+            </div>
+            <div class="abar-r">
+              <button class="btn btn-success btn-sm" onclick="exportAll()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+              <button class="btn btn-danger btn-sm" onclick="exportPDFAll()"><i class="ti ti-file-type-pdf"></i> PDF All</button>
+            </div>
+          </div>
+          <div id="hist-list"></div>
+        </div>
+
+        <!-- USERS -->
+        <div class="page" id="page-users">
+          <div class="card">
+            <div class="abar"><div class="card-title" style="margin:0;border:none;padding:0"><i class="ti ti-users"></i> User Management</div>
+              <button class="btn btn-primary btn-sm" onclick="openAddUser()"><i class="ti ti-plus"></i> Add User</button></div>
+            <div id="user-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="ti ti-mail"></i> Email Notification Settings</div>
+            <div class="form-grid">
+              <div class="fg">
+                <label class="lbl">SMTP Server (Simulated)</label>
+                <input type="text" value="smtp.tgt.co.th" readonly>
+              </div>
+              <div class="fg">
+                <label class="lbl">Sender Email</label>
+                <input type="email" id="sender-email" value="gtap-noreply@tgt.co.th">
+              </div>
+              <div class="fg full">
+                <label class="lbl">Notify Admin on New Request</label>
+                <div class="cb-row"><label class="cbi"><input type="checkbox" id="notif-new" checked> เมื่อมี Request ใหม่</label><label class="cbi"><input type="checkbox" id="notif-approve" checked> เมื่อ Approve/Reject</label></div>
+              </div>
+            </div>
+            <div style="margin-top:10px"><button class="btn btn-primary btn-sm" onclick="testEmail()"><i class="ti ti-send"></i> Test Send Email (Simulated)</button></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD USER MODAL -->
+<div class="modal-bg" id="modal-user">
+  <div class="modal">
+    <h3><i class="ti ti-user-plus"></i> เพิ่มผู้ใช้งาน</h3>
+    <div class="form-grid" style="gap:12px">
+      <div class="fg"><label class="lbl">Username <span class="req">*</span></label><input type="text" id="mu-user" placeholder="username"></div>
+      <div class="fg"><label class="lbl">Password <span class="req">*</span></label><input type="password" id="mu-pass" placeholder="••••••••"></div>
+      <div class="fg full"><label class="lbl">Full Name <span class="req">*</span></label><input type="text" id="mu-name" placeholder="ชื่อ-นามสกุล"></div>
+      <div class="fg"><label class="lbl">Email</label><input type="email" id="mu-email" placeholder="email@tgt.co.th"></div>
+      <div class="fg"><label class="lbl">Role</label>
+        <select id="mu-role"><option value="viewer">Viewer (ดูอย่างเดียว)</option><option value="buyer">Buyer (สร้าง Request)</option><option value="admin">Admin (เต็มสิทธิ์)</option></select></div>
+      <div class="fg"><label class="lbl">Department</label><input type="text" id="mu-dept" placeholder="เช่น PR30"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-user')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="addUser()">เพิ่มผู้ใช้</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toasts"></div>
+
+<script>
+// ── USERS DB ───────────────────────────────────────────────────
+let USERS = JSON.parse(localStorage.getItem('gtap_users') || 'null') || [
+  {id:1, username:'admin', password:'admin123', name:'Admin User', email:'admin@tgt.co.th', role:'admin', dept:'IT'},
+  {id:2, username:'buyer', password:'buyer123', name:'Buyer สมชาย', email:'buyer@tgt.co.th', role:'buyer', dept:'PR30'},
+  {id:3, username:'viewer', password:'view123', name:'Viewer ทดสอบ', email:'viewer@tgt.co.th', role:'viewer', dept:'QA'},
+];
+let DB = JSON.parse(localStorage.getItem('gtap_db2') || '[]');
+let LOGS = JSON.parse(localStorage.getItem('gtap_logs') || '[]');
+let CU = null; // current user
+
+function saveDB() { localStorage.setItem('gtap_db2', JSON.stringify(DB)); }
+function saveUsers() { localStorage.setItem('gtap_users', JSON.stringify(USERS)); }
+function saveLogs() { localStorage.setItem('gtap_logs', JSON.stringify(LOGS)); }
+
+function addLog(msg, type='ok') {
+  LOGS.unshift({msg, type, time: new Date().toISOString()});
+  LOGS = LOGS.slice(0, 50);
+  saveLogs();
+}
+
+// ── AUTH ──────────────────────────────────────────────────────
+function doLogin() {
+  const u = document.getElementById('li-user').value.trim();
+  const p = document.getElementById('li-pass').value;
+  const found = USERS.find(x => (x.username===u || x.email===u) && x.password===p);
+  if (!found) { document.getElementById('login-err').style.display='block'; return; }
+  CU = found;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('sb-avatar').textContent = found.name[0].toUpperCase();
+  document.getElementById('sb-uname').textContent = found.name;
+  document.getElementById('sb-urole').textContent = found.role === 'admin' ? 'Administrator' : found.role === 'buyer' ? 'Buyer' : 'Viewer';
+  // Admin-only items
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = found.role === 'admin' ? '' : 'none';
+  });
+  // Prefill form
+  document.getElementById('f-uname').value = found.name;
+  document.getElementById('f-dept').value = found.dept || '';
+  document.getElementById('f-email').value = found.email || '';
+  updateBadge(); renderDash();
+  addLog(`${found.name} เข้าสู่ระบบ`);
+}
+
+function doLogout() {
+  addLog(`${CU?.name} ออกจากระบบ`, 'warn');
+  CU = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('li-user').value = '';
+  document.getElementById('li-pass').value = '';
+  document.getElementById('login-err').style.display = 'none';
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────
+const pgs = {dash:'Dashboard',new:'New Request',hist:'Request History',users:'User Management'};
+const subs = {dash:'ภาพรวมและสถิติ',new:'สร้าง Sourcing Request ใหม่',hist:'ประวัติทั้งหมด',users:'จัดการผู้ใช้และสิทธิ์'};
+
+function showPage(id) {
+  if ((id==='users') && CU?.role !== 'admin') { toast('ไม่มีสิทธิ์เข้าถึง', 'err'); return; }
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  const nav = document.getElementById('nav-'+id);
+  if (nav) nav.classList.add('active');
+  document.getElementById('pg-title').textContent = pgs[id]||'';
+  document.getElementById('pg-sub').textContent = subs[id]||'';
+  if (id==='dash') { renderDash(); renderCharts(); }
+  if (id==='hist') renderHist();
+  if (id==='users') renderUsers();
+  if (id==='new') { genDoc(); initDates(); }
+}
+
+function initDates() {
+  const t = new Date().toISOString().split('T')[0];
+  if (!document.getElementById('f-iss').value) document.getElementById('f-iss').value = t;
+  if (!document.getElementById('f-rdt').value) document.getElementById('f-rdt').value = t;
+}
+
+// ── TOAST ────────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const ico = type==='ok'?'check':type==='err'?'alert-circle':'info-circle';
+  el.innerHTML = `<i class="ti ti-${ico}"></i> ${msg}`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>el.remove(), 3200);
+}
+
+// ── MODAL ────────────────────────────────────────────────────
+function openAddUser() { document.getElementById('modal-user').classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── FORM ROWS ────────────────────────────────────────────────
+let rowIds=[], rowCnt=0;
+function addRow() {
+  rowCnt++;
+  const id=rowCnt;
+  rowIds.push(id);
+  const tbody = document.getElementById('prod-body');
+  const empty = document.getElementById('empty-row');
+  if (empty) empty.remove();
+  const tr = document.createElement('tr');
+  tr.id = `pr-${id}`;
+  tr.innerHTML = `
+    <td class="nc">${rowIds.length}</td>
+    <td><input type="text" id="r${id}m" style="width:65px" placeholder="Model"></td>
+    <td><input type="text" id="r${id}p" style="width:100px" placeholder="Part No."></td>
+    <td><input type="text" id="r${id}n" style="width:140px" placeholder="Product Name"></td>
+    <td><input type="number" id="r${id}q" style="width:50px" value="1" min="1"></td>
+    <td><select id="r${id}u" style="width:65px"><option>Set</option><option>Pcs</option><option>Box</option><option>Lot</option><option>Kg</option><option>M</option></select></td>
+    <td><input type="text" id="r${id}b" style="width:70px" placeholder="Budget"></td>
+    <td><input type="text" id="r${id}gc" style="width:80px" placeholder="GTAP Code"></td>
+    <td><input type="text" id="r${id}gn" style="width:140px" placeholder="GTAP Name"></td>
+    <td><select id="r${id}no" style="width:60px"><option value="P">P (New)</option><option value="O">O (Old)</option></select></td>
+    <td><input type="text" id="r${id}sc" style="width:70px" placeholder="Code"></td>
+    <td><input type="text" id="r${id}sn" style="width:120px" placeholder="Supplier"></td>
+    <td><input type="number" id="r${id}lt" style="width:50px" placeholder="14"></td>
+    <td><select id="r${id}cy" style="width:65px"><option>THB</option><option>USD</option><option>JPY</option><option>EUR</option></select></td>
+    <td><input type="number" id="r${id}pr" style="width:75px" placeholder="0"></td>
+    <td><input type="number" id="r${id}mq" style="width:50px" value="1"></td>
+    <td><input type="text" id="r${id}rm" style="width:90px" placeholder="หมายเหตุ"></td>
+    <td><button class="btn btn-sm btn-danger btn-icon" onclick="delRow(${id})"><i class="ti ti-trash"></i></button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function delRow(id) {
+  document.getElementById(`pr-${id}`)?.remove();
+  rowIds = rowIds.filter(x=>x!==id);
+  if (!rowIds.length) {
+    document.getElementById('prod-body').innerHTML = `<tr id="empty-row"><td colspan="18" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>`;
+  }
+  document.querySelectorAll('#prod-body tr:not(#empty-row)').forEach((tr,i)=>{ const f=tr.querySelector('td'); if(f) f.textContent=i+1; });
+}
+
+function getRows() {
+  return rowIds.map(id=>({
+    model:V(`r${id}m`), partNo:V(`r${id}p`), name:V(`r${id}n`), qty:V(`r${id}q`),
+    unit:V(`r${id}u`), budget:V(`r${id}b`), gtapCode:V(`r${id}gc`), gtapName:V(`r${id}gn`),
+    newOld:V(`r${id}no`), supCode:V(`r${id}sc`), supName:V(`r${id}sn`), leadTime:V(`r${id}lt`),
+    currency:V(`r${id}cy`), price:V(`r${id}pr`), moq:V(`r${id}mq`), remark:V(`r${id}rm`)
+  }));
+}
+
+function V(id){ const e=document.getElementById(id); return e?e.value:''; }
+function VC(name){ return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(c=>c.value).join(', '); }
+function genDoc(){ const y=new Date().getFullYear(); const s=String(DB.filter(r=>r.docNo.includes(y)).length+1).padStart(3,'0'); document.getElementById('f-doc').value=`PSB-${y}-${s}`; }
+function updateBadge(){ document.getElementById('nb-hist').textContent=DB.length; }
+
+// ── SUBMIT ────────────────────────────────────────────────────
+function submitReq() {
+  if (CU?.role === 'viewer') { toast('ไม่มีสิทธิ์สร้าง Request', 'err'); return; }
+  const req_fields = ['f-iss','f-rdt','f-fac','f-uname','f-dept','f-email'];
+  let ok = true;
+  req_fields.forEach(id=>{ const e=document.getElementById(id); if(!e.value.trim()){e.classList.add('err');ok=false;}else e.classList.remove('err'); });
+  if (!ok) { toast('กรุณากรอกข้อมูลที่จำเป็น (*)', 'err'); return; }
+
+  const purpose=[]; if(document.getElementById('f-pm').checked)purpose.push('Market Price'); if(document.getElementById('f-pp').checked)purpose.push('Purchase Product');
+  const ot=[]; ['f-ot1','f-ot2','f-ot3','f-ot4'].forEach((id,i)=>{ if(document.getElementById(id).checked) ot.push(['TGT/TGRT/PDO','TGAS/PPA','BOI','ODC'][i]); });
+
+  const r = {
+    id:Date.now(), docNo:V('f-doc'), issueDate:V('f-iss'), requestDate:V('f-rdt'),
+    factory:V('f-fac'), userName:V('f-uname'), dept:V('f-dept'), section:V('f-sec'),
+    ext:V('f-ext'), email:V('f-email'), purpose:purpose.join(', '), orderType:ot.join(', '),
+    purposeDesc:V('f-pdesc'), productType:VC('pt'), remark:V('f-rmk'),
+    payment:V('f-pay'), status:V('f-sta'), products:getRows(),
+    createdAt:new Date().toISOString(), createdBy:CU?.name||''
+  };
+  DB.unshift(r); saveDB(); updateBadge();
+  addLog(`สร้าง Request ${r.docNo} โดย ${r.userName}`);
+  simulateEmail(r, 'new');
+  clearForm(); showPage('dash');
+  toast(`บันทึกสำเร็จ! ${r.docNo}`);
+}
+
+function clearForm() {
+  ['f-iss','f-rdt','f-uname','f-dept','f-sec','f-ext','f-pdesc','f-rmk'].forEach(id=>{const e=document.getElementById(id);if(e){e.value='';e.classList.remove('err');}});
+  document.getElementById('f-fac').value='';
+  document.getElementById('f-pay').value='';
+  document.getElementById('f-sta').value='Pending';
+  document.getElementById('f-email').value = CU?.email || '';
+  document.querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=false);
+  document.getElementById('prod-body').innerHTML=`<tr id="empty-row"><td colspan="18" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>`;
+  rowIds=[]; genDoc();
+}
+
+// ── EMAIL SIMULATION ──────────────────────────────────────────
+function simulateEmail(r, eventType) {
+  const adminEmails = USERS.filter(u=>u.role==='admin').map(u=>u.email).join(', ');
+  if (eventType==='new') {
+    console.log(`[EMAIL SIMULATED]
+To: ${adminEmails}
+Subject: [G-TAP] New Sourcing Request - ${r.docNo}
+Body: Request ${r.docNo} จาก ${r.userName} (${r.dept}) กรุณาตรวจสอบและ Approve ใน G-TAP System`);
+    toast(`📧 Email แจ้ง Admin แล้ว (Simulated)`, 'ok');
+  } else if (eventType==='approve') {
+    console.log(`[EMAIL SIMULATED]
+To: ${r.email}
+Subject: [G-TAP] Request ${r.docNo} - ${r.status}
+Body: Request ${r.docNo} ของคุณได้รับการ ${r.status} แล้ว`);
+    toast(`📧 Email แจ้ง ${r.userName} แล้ว (Simulated)`, 'ok');
+  }
+}
+
+function testEmail() {
+  toast('📧 Test Email ส่งแล้ว (Simulated) — ดู Console สำหรับรายละเอียด', 'ok');
+  console.log('[TEST EMAIL] SMTP:', document.getElementById('sender-email').value, '→ All admins');
+}
+
+// ── STATUS UPDATE ─────────────────────────────────────────────
+function updateStatus(id, newStatus) {
+  if (CU?.role !== 'admin') { toast('ต้องเป็น Admin ถึงจะ Approve/Reject ได้', 'err'); return; }
+  const r = DB.find(x=>x.id===id);
+  if (!r) return;
+  r.status = newStatus;
+  r.updatedAt = new Date().toISOString();
+  r.updatedBy = CU?.name;
+  saveDB(); renderHist(); renderDash(); renderCharts();
+  addLog(`${CU.name} ${newStatus} Request ${r.docNo}`, newStatus==='Approved'?'ok':'err');
+  simulateEmail(r, 'approve');
+  toast(`${r.docNo} → ${newStatus}`);
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────
+function renderDash() {
+  document.getElementById('s0').textContent=DB.length;
+  document.getElementById('s1').textContent=DB.filter(r=>r.status==='Pending').length;
+  document.getElementById('s2').textContent=DB.filter(r=>r.status==='Approved').length;
+  document.getElementById('s3').textContent=DB.reduce((s,r)=>s+(r.products?.length||0),0);
+  const el=document.getElementById('dash-recent');
+  if(!DB.length){el.innerHTML=`<div class="empty"><i class="ti ti-inbox"></i><p>ยังไม่มี Request</p></div>`;} else {el.innerHTML=DB.slice(0,5).map(r=>rcHtml(r,false)).join('');}
+  renderActivityLog();
+}
+
+function renderActivityLog() {
+  const el = document.getElementById('activity-log');
+  if (!LOGS.length) { el.innerHTML=`<div class="empty"><i class="ti ti-list"></i><p>ยังไม่มีกิจกรรม</p></div>`; return; }
+  el.innerHTML = LOGS.slice(0,8).map(l=>`
+    <div class="log-item">
+      <div class="log-dot ${l.type||'ok'}"></div>
+      <div><div class="log-text">${l.msg}</div><div class="log-time">${fmtTime(l.time)}</div></div>
+    </div>`).join('');
+}
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'numeric'}) + ' ' + d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ── CHARTS ────────────────────────────────────────────────────
+let charts = {};
+function renderCharts() {
+  // Status Pie
+  const pending=DB.filter(r=>r.status==='Pending').length;
+  const approved=DB.filter(r=>r.status==='Approved').length;
+  const rejected=DB.filter(r=>r.status==='Rejected').length;
+  mkChart('chart-status','doughnut',
+    ['Pending','Approved','Rejected'],[pending,approved,rejected],
+    ['#f59e0b','#10b981','#ef4444']);
+
+  // Factory Bar
+  const factories=['TGT1','TGT2','TGT3','TGRT','PDO'];
+  const facCounts = factories.map(f=>DB.filter(r=>r.factory===f).length);
+  mkChart('chart-factory','bar',factories,facCounts,['#2563eb']);
+
+  // Monthly Trend
+  const months=[]; const counts=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(); d.setMonth(d.getMonth()-i);
+    const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    months.push(d.toLocaleDateString('th-TH',{month:'short',year:'2-digit'}));
+    counts.push(DB.filter(r=>r.createdAt?.startsWith(ym)).length);
+  }
+  mkChart('chart-trend','line',months,counts,['#2563eb']);
+}
+
+function mkChart(id, type, labels, data, colors) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(ctx, {
+    type, data:{
+      labels,
+      datasets:[{
+        data, backgroundColor:colors,
+        borderColor: type==='line'?colors[0]:'transparent',
+        borderWidth: type==='line'?2:0,
+        fill: type==='line', tension:.4,
+        pointBackgroundColor: type==='line'?colors[0]:'transparent'
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:type==='doughnut',position:'bottom',labels:{font:{size:11},padding:12}}},scales:type!=='doughnut'?{y:{beginAtZero:true,grid:{color:'#f1f5f9'},ticks:{font:{size:11}}},x:{grid:{display:false},ticks:{font:{size:11}}}}:{}}
+  });
+}
+
+// ── HISTORY ───────────────────────────────────────────────────
+function renderHist() {
+  const q=(document.getElementById('sq')?.value||'').toLowerCase();
+  const st=document.getElementById('fs')?.value||'';
+  const fc=document.getElementById('ff')?.value||'';
+  let list=DB.filter(r=>{
+    const txt=[r.docNo,r.userName,r.dept,r.factory,r.purposeDesc].join(' ').toLowerCase();
+    return (!q||txt.includes(q))&&(!st||r.status===st)&&(!fc||r.factory===fc);
+  });
+  const el=document.getElementById('hist-list');
+  if(!list.length){el.innerHTML=`<div class="empty"><i class="ti ti-search-off"></i><p>ไม่พบ Request</p></div>`;return;}
+  el.innerHTML=list.map(r=>rcHtml(r,true)).join('');
+}
+
+function sBadge(s){const m={Pending:'b-pending',Approved:'b-approved',Rejected:'b-rejected'};return `<span class="badge ${m[s]||''}">${s}</span>`;}
+
+function rcHtml(r, showAct) {
+  const cls=(r.status||'').toLowerCase();
+  const isAdmin = CU?.role === 'admin';
+  return `<div class="req-card ${cls}">
+    <div class="rc-head">
+      <span class="rc-docno"><i class="ti ti-file-description" style="font-size:13px;margin-right:3px"></i>${r.docNo}</span>
+      <div class="rc-actions">
+        ${sBadge(r.status)}
+        ${showAct && isAdmin ? `
+          <select class="status-select ${r.status}" onchange="updateStatus(${r.id},this.value)" onclick="event.stopPropagation()">
+            <option ${r.status==='Pending'?'selected':''}>Pending</option>
+            <option ${r.status==='Approved'?'selected':''}>Approved</option>
+            <option ${r.status==='Rejected'?'selected':''}>Rejected</option>
+          </select>` : ''}
+        <button class="btn btn-sm btn-success" onclick="exportOne(${r.id})"><i class="ti ti-file-spreadsheet"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="exportPDF(${r.id})"><i class="ti ti-file-type-pdf"></i></button>
+        ${showAct && isAdmin ? `<button class="btn btn-sm" style="color:var(--danger);border-color:#fca5a5" onclick="delReq(${r.id})"><i class="ti ti-trash"></i></button>` : ''}
+      </div>
+    </div>
+    <div class="rc-meta">
+      <span class="meta"><i class="ti ti-user"></i> ${r.userName}</span>
+      <span class="meta"><i class="ti ti-building"></i> ${r.dept}${r.section?' / '+r.section:''}</span>
+      <span class="meta"><i class="ti ti-map-pin"></i> ${r.factory}</span>
+      <span class="meta"><i class="ti ti-calendar"></i> ${r.issueDate}</span>
+      <span class="meta"><i class="ti ti-package"></i> ${r.products?.length||0} items</span>
+      ${r.payment?`<span class="meta"><i class="ti ti-credit-card"></i> ${r.payment}</span>`:''}
+      ${r.createdBy?`<span class="meta"><i class="ti ti-pencil"></i> by ${r.createdBy}</span>`:''}
+    </div>
+    ${r.purposeDesc?`<div style="font-size:12px;color:var(--muted);margin-top:5px">${r.purposeDesc}</div>`:''}
+  </div>`;
+}
+
+function delReq(id) {
+  if (!confirm('ลบ Request นี้?')) return;
+  const r = DB.find(x=>x.id===id);
+  DB = DB.filter(x=>x.id!==id);
+  saveDB(); updateBadge(); renderHist(); renderDash(); renderCharts();
+  addLog(`ลบ Request ${r?.docNo}`, 'err');
+  toast('ลบเรียบร้อย');
+}
+
+// ── USER MANAGEMENT ───────────────────────────────────────────
+function renderUsers() {
+  const el = document.getElementById('user-list');
+  el.innerHTML = USERS.map(u=>`
+    <div class="user-row">
+      <div class="u-avatar">${u.name[0].toUpperCase()}</div>
+      <div class="u-info">
+        <div class="u-name">${u.name} <span class="badge ${u.role==='admin'?'b-admin':u.role==='buyer'?'b-viewer':''}" style="margin-left:5px">${u.role}</span></div>
+        <div class="u-meta">${u.username} · ${u.email||'—'} · ${u.dept||'—'}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        ${CU?.role==='admin'&&u.id!==CU?.id?`<button class="btn btn-sm btn-danger" onclick="removeUser(${u.id})"><i class="ti ti-trash"></i></button>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function addUser() {
+  const username=V('mu-user').trim(), password=V('mu-pass'), name=V('mu-name').trim();
+  if (!username||!password||!name) { toast('กรอกข้อมูลให้ครบ', 'err'); return; }
+  if (USERS.find(u=>u.username===username)) { toast('Username นี้มีแล้ว', 'err'); return; }
+  USERS.push({id:Date.now(), username, password, name, email:V('mu-email'), role:V('mu-role'), dept:V('mu-dept')});
+  saveUsers(); closeModal('modal-user'); renderUsers();
+  addLog(`เพิ่ม User: ${name}`);
+  toast(`เพิ่ม ${name} สำเร็จ`);
+  ['mu-user','mu-pass','mu-name','mu-email','mu-dept'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+}
+
+function removeUser(id) {
+  if (!confirm('ลบ User นี้?')) return;
+  const u = USERS.find(x=>x.id===id);
+  USERS = USERS.filter(x=>x.id!==id);
+  saveUsers(); renderUsers();
+  addLog(`ลบ User: ${u?.name}`, 'err');
+  toast('ลบ User เรียบร้อย');
+}
+
+// ── EXCEL EXPORT ──────────────────────────────────────────────
+function buildWB(reqs) {
+  const wb = XLSX.utils.book_new();
+  reqs.forEach(r => {
+    const rows = [
+      ['G-TAP SOURCING REQUEST FORM'],['ISO TS: FM-PB30/PBA-A-09 REV.07'],[],
+      ['Doc. No.',r.docNo,'','Issue Date',r.issueDate,'','Status',r.status],
+      ['Factory',r.factory,'','Request Date',r.requestDate,'','Updated By',r.updatedBy||''],
+      ['User Name',r.userName,'','Department',r.dept,'','Section',r.section],
+      ['Email',r.email,'','Ext.',r.ext],[],
+      ['Purpose',r.purpose],['Order Type',r.orderType],['Purpose Desc.',r.purposeDesc],['Product Type',r.productType],[],
+      ['No.','Model','Product No.','Product Name','Qty','Unit','Budget','GTAP Code','GTAP Name','P/O','Sup.Code','Supplier','Lead(Day)','Currency','Price','MOQ','Remark'],
+    ];
+    (r.products||[]).forEach((p,i)=>rows.push([i+1,p.model,p.partNo,p.name,p.qty,p.unit,p.budget,p.gtapCode,p.gtapName,p.newOld,p.supCode,p.supName,p.leadTime,p.currency,p.price,p.moq,p.remark]));
+    rows.push([]); rows.push(['Remark',r.remark]); rows.push(['Payment',r.payment]);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[10,12,14,20,6,6,8,10,22,6,10,18,8,6,10,6,16].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws, (r.docNo||'Sheet').replace(/[:\\/?*\[\]]/g,'-').slice(0,31));
+  });
+  return wb;
+}
+function exportOne(id){const r=DB.find(x=>x.id===id);if(!r)return;XLSX.writeFile(buildWB([r]),`GTAP_${r.docNo}.xlsx`);toast(`Export ${r.docNo} สำเร็จ`);}
+function exportAll(){if(!DB.length){toast('ไม่มีข้อมูล','err');return;}const wb=buildWB(DB);const s=[['Doc.No.','User','Dept','Factory','Issue','Request','Status','Items','Payment']];DB.forEach(r=>s.push([r.docNo,r.userName,r.dept,r.factory,r.issueDate,r.requestDate,r.status,r.products?.length||0,r.payment]));const ws=XLSX.utils.aoa_to_sheet(s);XLSX.utils.book_append_sheet(wb,ws,'Summary');XLSX.writeFile(wb,`GTAP_All_${new Date().toISOString().split('T')[0]}.xlsx`);toast(`Export ${DB.length} Request สำเร็จ`);}
+
+// ── PDF EXPORT ────────────────────────────────────────────────
+function buildPDF(r) {
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const W=297, M=14;
+  doc.setFillColor(26,58,92); doc.rect(0,0,W,22,'F');
+  doc.setTextColor(255,255,255); doc.setFontSize(14); doc.setFont('helvetica','bold');
+  doc.text('G-TAP SOURCING REQUEST FORM',M,10);
+  doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.text('ISO TS Form: FM-PB30/PBA-A-09 REV.07',M,16);
+  doc.text(`Doc. No.: ${r.docNo}   Status: ${r.status}   Factory: ${r.factory}`,W-M,10,{align:'right'});
+  doc.text(`Issue: ${r.issueDate}   Request: ${r.requestDate}`,W-M,16,{align:'right'});
+
+  let y=28;
+  doc.setTextColor(30,41,59); doc.setFontSize(9); doc.setFont('helvetica','bold');
+  doc.text('HEADER INFORMATION',M,y); y+=5;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  const info=[
+    [`User Name: ${r.userName}`,`Department: ${r.dept}`,`Section: ${r.section||'-'}`,`Ext: ${r.ext||'-'}`],
+    [`Email: ${r.email}`,`Purpose: ${r.purpose||'-'}`,`Order Type: ${r.orderType||'-'}`,``],
+    [`Product Type: ${(r.productType||'-').slice(0,80)}`,,,],
+    [`Purpose Desc: ${(r.purposeDesc||'-').slice(0,80)}`,,,],
+  ];
+  info.forEach(row=>{ row.forEach((t,i)=>{ if(t) doc.text(t,M+(i*(W-M*2)/4),y); }); y+=5; });
+
+  y+=3;
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text('PRODUCT DETAIL',M,y); y+=4;
+
+  const cols=['No.','Model','Part No.','Name','Qty','Unit','Budget','GTAP Code','GTAP Name','P/O','Supplier','Lead','Cur','Price','MOQ'];
+  const cw=[8,14,18,28,8,9,12,16,28,8,24,10,8,12,8];
+  doc.setFillColor(240,244,248); doc.rect(M,y-4,W-M*2,6,'F');
+  doc.setTextColor(100,116,139); doc.setFontSize(7); doc.setFont('helvetica','bold');
+  let x=M;
+  cols.forEach((c,i)=>{ doc.text(c,x+1,y); x+=cw[i]; });
+  y+=2;
+  doc.setTextColor(30,41,59); doc.setFont('helvetica','normal');
+  (r.products||[]).forEach((p,idx)=>{
+    if(y>185){doc.addPage();y=14;}
+    const bg = idx%2===0?[255,255,255]:[248,250,252];
+    doc.setFillColor(...bg); doc.rect(M,y-3,W-M*2,6,'F');
+    x=M;
+    const vals=[idx+1,p.model,p.partNo,(p.name||'').slice(0,20),p.qty,p.unit,p.budget,p.gtapCode,(p.gtapName||'').slice(0,20),p.newOld,(p.supName||'').slice(0,16),p.leadTime,p.currency,p.price,p.moq];
+    vals.forEach((v,i)=>{ doc.text(String(v||''),x+1,y); x+=cw[i]; });
+    y+=6;
+  });
+
+  y+=4;
+  doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  doc.text(`Remark: ${r.remark||'-'}   Payment: ${r.payment||'-'}`,M,y); y+=6;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(100,116,139);
+  const sigs=['Requested by','Verified by','Approved by'];
+  sigs.forEach((s,i)=>{
+    const sx=M+i*((W-M*2)/3), sy=y+8;
+    doc.line(sx,sy,sx+50,sy);
+    doc.text(s,sx,sy+4);
+    doc.text(i===0?r.userName:'_________________',sx,sy+8);
+  });
+
+  y+=25;
+  doc.setFontSize(7); doc.text(`Printed: ${new Date().toLocaleString('th-TH')}   By: ${CU?.name||''}   System: G-TAP Sourcing Request v2`,M,y);
+  return doc;
+}
+
+function exportPDF(id) {
+  const r=DB.find(x=>x.id===id);
+  if(!r){toast('ไม่พบข้อมูล','err');return;}
+  try{ const d=buildPDF(r); d.save(`GTAP_${r.docNo}.pdf`); toast(`Export PDF ${r.docNo} สำเร็จ`); addLog(`Export PDF: ${r.docNo}`); }
+  catch(e){ toast('PDF export ผิดพลาด: '+e.message,'err'); console.error(e); }
+}
+
+function exportPDFAll() {
+  if(!DB.length){toast('ไม่มีข้อมูล','err');return;}
+  const {jsPDF}=window.jspdf;
+  const merged=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  DB.forEach((r,idx)=>{
+    if(idx>0) merged.addPage();
+    try {
+      const d=buildPDF(r);
+      const totalPages=d.getNumberOfPages();
+      for(let pg=1;pg<=totalPages;pg++){
+        if(idx>0||pg>1) merged.addPage();
+        const data=d.getPage(pg);
+        // Copy content by re-rendering each page
+      }
+    } catch(e){}
+  });
+  // Simple approach: export each individually merged
+  if(DB.length===1){exportPDF(DB[0].id);return;}
+  toast(`กำลัง Export ${DB.length} PDF ทีละไฟล์...`,'ok');
+  DB.forEach((r,i)=>{ setTimeout(()=>{ try{buildPDF(r).save(`GTAP_${r.docNo}.pdf`);}catch(e){} },i*300); });
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+updateBadge();
+</script>
+</body>
+</html>
