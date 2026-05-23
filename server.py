@@ -14,7 +14,7 @@ CORS(app)
 
 DATABASE_URL = (
     os.environ.get('POSTGRES_URL') or
-    os.environ.get('DATABASE_URL', 'postgresql://myuser:mypassword@localhost:5432/mydatabase')
+    os.environ.get('DATABASE_URL', 'postgresql://postgres:0947659808Rin%40@db.ppixmnxrnykaieenyaxh.supabase.co:5432/postgres?sslmode=require')
 )
 
 # ── EMAIL CONFIG ──────────────────────────────────────────────
