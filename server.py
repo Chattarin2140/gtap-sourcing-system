@@ -12,7 +12,10 @@ from email.mime.multipart import MIMEMultipart
 app = Flask(__name__, static_folder='.')
 CORS(app)
 
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://myuser:mypassword@localhost:5432/mydatabase')
+DATABASE_URL = (
+    os.environ.get('POSTGRES_URL') or
+    os.environ.get('DATABASE_URL', 'postgresql://myuser:mypassword@localhost:5432/mydatabase')
+)
 
 # ── EMAIL CONFIG ──────────────────────────────────────────────
 SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
@@ -309,7 +312,8 @@ def get_logs():
 def index():
     return send_from_directory('.', 'index.html')
 
+init_db()
+
 if __name__ == '__main__':
-    init_db()
     print('G-TAP v2 running at http://localhost:5000')
     app.run(debug=True, port=5000)
