@@ -310,7 +310,7 @@ def get_logs():
 
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    return send_from_directory(app.static_folder, 'index.html')
 
 try:
     init_db()
