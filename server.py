@@ -22,7 +22,7 @@ SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
 SMTP_USER = os.environ.get('SMTP_USER', 'rinti256@gmail.com')
 SMTP_PASS = os.environ.get('SMTP_PASS', 'umqv uhyx dtyw pdnz')
-SENDER    = os.environ.get('SENDER', 'chattarin.k@ku.th   ')
+SENDER    = os.environ.get('SENDER', 'chattarin.k@ku.th')
 
 def get_db():
     conn = psycopg2.connect(DATABASE_URL)
