@@ -2,14 +2,14 @@
 G-TAP Sourcing Request System v2 — Backend
 Flask + PostgreSQL + Email Notification (smtplib)
 """
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import psycopg2, psycopg2.extras, smtplib, os
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
+app = Flask(__name__)
 CORS(app)
 
 DATABASE_URL = (
@@ -159,6 +159,10 @@ def test_email():
         '<p>G-TAP email test — ถ้าเห็น email นี้แปลว่า SMTP ใช้งานได้แล้ว ✅</p>'
     )
     return jsonify({'sent': ok, 'to': SMTP_USER})
+
+@app.before_request
+def before():
+    ensure_db()
 
 # ── AUTH ──────────────────────────────────────────────────────
 @app.route('/api/login', methods=['POST'])
@@ -382,15 +386,18 @@ def get_logs():
             rows = cur.fetchall()
     return jsonify([dict(r) for r in rows])
 
-@app.route('/')
-def index():
-    return send_from_directory(app.static_folder, 'index.html')
+_db_ready = False
 
-try:
-    init_db()
-except Exception as e:
-    print(f'init_db error: {e}')
+def ensure_db():
+    global _db_ready
+    if not _db_ready:
+        try:
+            init_db()
+            _db_ready = True
+        except Exception as e:
+            print(f'ensure_db error: {e}')
 
 if __name__ == '__main__':
+    ensure_db()
     print('G-TAP v2 running at http://localhost:5000')
     app.run(debug=True, port=5000)
