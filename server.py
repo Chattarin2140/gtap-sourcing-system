@@ -22,7 +22,8 @@ SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
 SMTP_USER = os.environ.get('SMTP_USER', 'rinti256@gmail.com')
 SMTP_PASS = os.environ.get('SMTP_PASS', 'umqv uhyx dtyw pdnz')
-SENDER    = os.environ.get('SENDER', 'chattarin.k@ku.th')
+SENDER    = os.environ.get('SENDER', 'rinti256@gmail.com')
+NOTIFY_CC = os.environ.get('NOTIFY_CC', 'rinti256@gmail.com')  # always CC this address
 
 def get_db():
     conn = psycopg2.connect(DATABASE_URL)
@@ -298,6 +299,9 @@ def api_notify():
             if d.get('email'): to.append(d['email'])
         else:
             to.extend(get_role_emails(role))
+    # Always include NOTIFY_CC so admin receives every notification
+    if NOTIFY_CC:
+        to.append(NOTIFY_CC)
     to = list(set(filter(None, to)))
     if not to:
         return jsonify({'message': 'no recipients'}), 200
