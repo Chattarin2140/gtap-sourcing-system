@@ -26,7 +26,7 @@ SENDER    = os.environ.get('SENDER', 'rinti256@gmail.com')
 NOTIFY_CC = os.environ.get('NOTIFY_CC', 'rinti256@gmail.com')  # always CC this address
 
 def get_db():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
     return conn
 
 def init_db():
@@ -145,6 +145,20 @@ def notify_status_change(r):
       </div>
     </div>"""
     send_email(to, f'[G-TAP] Request {r["doc_no"]} - {r["status"]}', html)
+
+# ── DEBUG / TEST ──────────────────────────────────────────────
+@app.route('/api/ping')
+def ping():
+    return jsonify({'status': 'ok', 'smtp_user': SMTP_USER, 'sender': SENDER})
+
+@app.route('/api/test-email')
+def test_email():
+    ok = send_email(
+        [SMTP_USER],
+        '[G-TAP] Test Email',
+        '<p>G-TAP email test — ถ้าเห็น email นี้แปลว่า SMTP ใช้งานได้แล้ว ✅</p>'
+    )
+    return jsonify({'sent': ok, 'to': SMTP_USER})
 
 # ── AUTH ──────────────────────────────────────────────────────
 @app.route('/api/login', methods=['POST'])
