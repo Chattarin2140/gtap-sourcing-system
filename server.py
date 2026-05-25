@@ -20,9 +20,9 @@ DATABASE_URL = (
 # ── EMAIL CONFIG ──────────────────────────────────────────────
 SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
-SMTP_USER = os.environ.get('SMTP_USER', 'your-email@gmail.com')
-SMTP_PASS = os.environ.get('SMTP_PASS', 'your-app-password')
-SENDER    = os.environ.get('SENDER',    'gtap-noreply@tgt.co.th')
+SMTP_USER = os.environ.get('SMTP_USER', 'rinti256@gmail.com')
+SMTP_PASS = os.environ.get('SMTP_PASS', 'umqv uhyx dtyw pdnz')
+SENDER    = os.environ.get('SENDER', 'chattarin.k@ku.th   ')
 
 def get_db():
     conn = psycopg2.connect(DATABASE_URL)
@@ -69,9 +69,11 @@ def init_db():
                     created_at TIMESTAMP DEFAULT NOW()
                 );
                 INSERT INTO users (username,password,name,email,role,dept) VALUES
-                  ('admin',  'admin123', 'Admin User',    'admin@tgt.co.th',  'admin',  'IT'),
-                  ('buyer',  'buyer123', 'Buyer สมชาย',  'buyer@tgt.co.th',  'buyer',  'PR30'),
-                  ('viewer', 'view123',  'Viewer ทดสอบ', 'viewer@tgt.co.th', 'viewer', 'QA')
+                  ('admin',  'admin123', 'Admin User',       'admin@tgt.co.th',  'admin',      'IT'),
+                  ('acct',   'acct123',  'บัญชี สมหญิง',    'acct@tgt.co.th',   'accounting', 'ACC'),
+                  ('buyer',  'buyer123', 'Buyer สมชาย',     'buyer@tgt.co.th',  'buyer',      'PR30'),
+                  ('mkt',    'mkt123',   'Marketing สมศรี', 'mkt@tgt.co.th',    'marketing',  'MKT'),
+                  ('viewer', 'view123',  'Viewer ทดสอบ',    'viewer@tgt.co.th', 'viewer',     'QA')
                 ON CONFLICT (username) DO NOTHING;
             ''')
         conn.commit()
@@ -261,10 +263,65 @@ def create_request():
     return jsonify({'id': req_id, 'docNo': doc_no, 'message': 'Created'}), 201
 
 @app.route('/api/requests/<int:rid>/status', methods=['PATCH'])
+VALID_STATUSES = ['Pending','Acct_Approved','Buyer_Approved','Rejected','Mkt_Approved','Mkt_Returned','Done']
+
+def get_role_emails(role):
+    try:
+        with get_db() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT email FROM users WHERE role=%s AND email IS NOT NULL AND email!=''", (role,))
+                rows = cur.fetchall()
+        return [row['email'] for row in rows]
+    except:
+        return []
+
+NOTIFY_CONFIG = {
+    'new':           {'roles':['accounting','admin'], 'subj':'Request ใหม่รอตรวจงบ',           'msg':'มี Sourcing Request ใหม่รอการตรวจสอบงบประมาณ'},
+    'Acct_Approved': {'roles':['buyer'],              'subj':'ผ่านบัญชีแล้ว รอ Buyer',          'msg':'Request ผ่านการตรวจงบแล้ว กรุณาตรวจสอบการจัดซื้อ'},
+    'Buyer_Approved':{'roles':['marketing'],          'subj':'รอ Marketing อนุมัติ',            'msg':'Buyer ยืนยันแล้ว รอ Marketing อนุมัติ'},
+    'Rejected':      {'roles':['requester'],          'subj':'Request ถูกปฏิเสธ',               'msg':'Request ของคุณถูกปฏิเสธโดย Buyer'},
+    'Mkt_Approved':  {'roles':['buyer'],              'subj':'Marketing อนุมัติแล้ว รอสรุป PO', 'msg':'Marketing อนุมัติแล้ว กรุณาสรุป PO'},
+    'Mkt_Returned':  {'roles':['buyer'],              'subj':'Marketing ส่งคืน Buyer',          'msg':'Marketing ส่งคืนให้ Buyer แก้ไข'},
+    'Done':          {'roles':['admin','requester'],  'subj':'Done — PO สรุปแล้ว',             'msg':'Request เสร็จสิ้น PO ถูกสรุปโดย Buyer'},
+}
+
+@app.route('/api/notify', methods=['POST'])
+def api_notify():
+    d = request.json or {}
+    event = d.get('event', d.get('status', ''))
+    cfg = NOTIFY_CONFIG.get(event)
+    if not cfg:
+        return jsonify({'message': 'no config'}), 200
+    to = []
+    for role in cfg['roles']:
+        if role == 'requester':
+            if d.get('email'): to.append(d['email'])
+        else:
+            to.extend(get_role_emails(role))
+    to = list(set(filter(None, to)))
+    if not to:
+        return jsonify({'message': 'no recipients'}), 200
+    status_label = {'Pending':'รอบัญชีตรวจ','Acct_Approved':'รอ Buyer','Buyer_Approved':'รอ Marketing',
+                    'Rejected':'Rejected','Mkt_Approved':'รอสรุป PO','Mkt_Returned':'ส่งคืน Buyer','Done':'Done ✅'}
+    html = f"""<div style="font-family:sans-serif;max-width:560px;margin:auto">
+      <div style="background:#1a3a5c;color:#fff;padding:16px 20px;border-radius:8px 8px 0 0"><b>G-TAP: {cfg['subj']}</b></div>
+      <div style="border:1px solid #e2e8f0;border-top:none;padding:20px;border-radius:0 0 8px 8px">
+        <p style="font-size:13px">{cfg['msg']}</p>
+        <table style="font-size:13px;width:100%;margin-top:12px">
+          <tr><td style="color:#64748b;padding:4px 0">Doc. No.:</td><td><b>{d.get('docNo','')}</b></td></tr>
+          <tr><td style="color:#64748b">จากคุณ:</td><td>{d.get('userName','')} ({d.get('dept','')})</td></tr>
+          <tr><td style="color:#64748b">สถานะ:</td><td><b style="color:#2563eb">{status_label.get(d.get('status',''), d.get('status',''))}</b></td></tr>
+        </table>
+      </div></div>"""
+    ok = send_email(to, f'[G-TAP] {cfg["subj"]} - {d.get("docNo","")}', html)
+    log(f'Email notify: {event} {d.get("docNo","")}', 'ok' if ok else 'warn')
+    return jsonify({'message': 'sent' if ok else 'smtp_error', 'to': to}), 200
+
+@app.route('/api/requests/<int:rid>/status', methods=['PATCH'])
 def update_status(rid):
     d = request.json or {}
     status = d.get('status')
-    if status not in ('Pending', 'Approved', 'Rejected'):
+    if status not in VALID_STATUSES:
         return jsonify({'error': 'Invalid status'}), 400
     with get_db() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -275,8 +332,7 @@ def update_status(rid):
             cur.execute('SELECT * FROM requests WHERE id=%s', (rid,))
             r = dict(cur.fetchone())
         conn.commit()
-    log(f'{d.get("updatedBy","")} {status} Request {r["doc_no"]}', 'ok' if status == 'Approved' else 'err')
-    notify_status_change(r)
+    log(f'{d.get("updatedBy","")} → {status} ({r["doc_no"]})', 'ok' if status not in ('Rejected',) else 'err')
     return jsonify({'message': 'Updated'})
 
 @app.route('/api/requests/<int:rid>', methods=['DELETE'])

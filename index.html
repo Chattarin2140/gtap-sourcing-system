@@ -150,11 +150,17 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
 .b-pending{background:#fef3c7;color:#92400e}.b-approved{background:#dcfce7;color:#166534}
 .b-rejected{background:#fee2e2;color:#991b1b}.b-admin{background:#dbeafe;color:#1e40af}
 .b-viewer{background:#f3e8ff;color:#6b21a8}
+.b-acct{background:#e0f2fe;color:#075985}.b-buyer-app{background:#fef9c3;color:#78350f}
+.b-mkt-app{background:#dcfce7;color:#14532d}.b-mkt-ret{background:#fff7ed;color:#9a3412}
+.b-done{background:#f0fdf4;color:#14532d;border:1px solid #86efac;font-weight:700}
 
 /* REQUEST CARDS */
 .req-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:8px;border-left:3px solid var(--border);transition:border-color .15s,box-shadow .15s;cursor:pointer}
 .req-card:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
 .req-card.pending{border-left-color:#f59e0b}.req-card.approved{border-left-color:#10b981}.req-card.rejected{border-left-color:#ef4444}
+.req-card.acct_approved{border-left-color:#3b82f6}.req-card.buyer_approved{border-left-color:#eab308}
+.req-card.mkt_approved{border-left-color:#22c55e}.req-card.mkt_returned{border-left-color:#f97316}
+.req-card.done{border-left-color:#16a34a}
 .rc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .rc-docno{font-size:14px;font-weight:700}
 .rc-actions{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
@@ -189,6 +195,11 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
 .status-select.Pending{background:#fef3c7;color:#92400e;border-color:#fde68a}
 .status-select.Approved{background:#dcfce7;color:#166534;border-color:#bbf7d0}
 .status-select.Rejected{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+.status-select.Acct_Approved{background:#e0f2fe;color:#075985;border-color:#7dd3fc}
+.status-select.Buyer_Approved{background:#fef9c3;color:#78350f;border-color:#fde047}
+.status-select.Mkt_Approved{background:#dcfce7;color:#14532d;border-color:#86efac}
+.status-select.Mkt_Returned{background:#fff7ed;color:#9a3412;border-color:#fed7aa}
+.status-select.Done{background:#f0fdf4;color:#14532d;border-color:#86efac;font-weight:700}
 
 /* USER MGMT */
 .user-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)}
@@ -232,7 +243,9 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
     <div class="login-accounts">
       <b>Demo Accounts:</b>
       <div class="acc-row"><span>admin / admin123</span><span class="badge b-admin">Admin</span></div>
+      <div class="acc-row"><span>acct / acct123</span><span class="badge b-acct">Accounting</span></div>
       <div class="acc-row"><span>buyer / buyer123</span><span class="badge b-viewer">Buyer</span></div>
+      <div class="acc-row"><span>mkt / mkt123</span><span class="badge b-mkt-app">Marketing</span></div>
       <div class="acc-row"><span>viewer / view123</span><span class="badge" style="background:#f1f5f9;color:#475569">Viewer</span></div>
     </div>
   </div>
@@ -289,8 +302,8 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
         <div class="page active" id="page-dash">
           <div class="stats-grid">
             <div class="stat blue"><div class="stat-ico blue"><i class="ti ti-file-text"></i></div><div class="stat-val" id="s0">0</div><div class="stat-lbl">Total Requests</div></div>
-            <div class="stat amber"><div class="stat-ico amber"><i class="ti ti-clock"></i></div><div class="stat-val" id="s1">0</div><div class="stat-lbl">Pending</div></div>
-            <div class="stat green"><div class="stat-ico green"><i class="ti ti-check"></i></div><div class="stat-val" id="s2">0</div><div class="stat-lbl">Approved</div></div>
+            <div class="stat amber"><div class="stat-ico amber"><i class="ti ti-clock"></i></div><div class="stat-val" id="s1">0</div><div class="stat-lbl">In Progress</div></div>
+            <div class="stat green"><div class="stat-ico green"><i class="ti ti-check"></i></div><div class="stat-val" id="s2">0</div><div class="stat-lbl">Done</div></div>
             <div class="stat purple"><div class="stat-ico purple"><i class="ti ti-package"></i></div><div class="stat-val" id="s3">0</div><div class="stat-lbl">Total Items</div></div>
           </div>
           <div class="charts-grid">
@@ -395,8 +408,8 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
               <div class="fg full"><label class="lbl">Remark</label><textarea id="f-rmk" placeholder="หมายเหตุ..."></textarea></div>
               <div class="fg"><label class="lbl">Payment</label>
                 <select id="f-pay"><option value="">-- Select --</option><option>30 Days</option><option>45 Days</option><option>60 Days</option><option>Cash</option><option>L/C</option><option>T/T</option></select></div>
-              <div class="fg"><label class="lbl">Status</label>
-                <select id="f-sta"><option value="Pending">Pending</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option></select></div>
+              <div class="fg"><label class="lbl">Status (Auto)</label>
+                <input type="text" value="Pending — รอบัญชีตรวจ" readonly style="background:#fef3c7;color:#92400e;font-weight:600"></div>
             </div>
           </div>
           <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:30px">
@@ -410,7 +423,16 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
           <div class="abar" style="margin-bottom:14px">
             <div style="display:flex;gap:8px;flex-wrap:wrap;flex:1">
               <div class="search-wrap"><i class="ti ti-search"></i><input type="text" id="sq" placeholder="ค้นหา Doc.No., ชื่อ, แผนก..." oninput="renderHist()"></div>
-              <select id="fs" onchange="renderHist()" style="width:130px"><option value="">All Status</option><option>Pending</option><option>Approved</option><option>Rejected</option></select>
+              <select id="fs" onchange="renderHist()" style="width:150px">
+                <option value="">All Status</option>
+                <option value="Pending">รอบัญชีตรวจ</option>
+                <option value="Acct_Approved">รอ Buyer</option>
+                <option value="Buyer_Approved">รอ Marketing</option>
+                <option value="Mkt_Approved">รอสรุป PO</option>
+                <option value="Mkt_Returned">ส่งคืน Buyer</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Done">Done ✅</option>
+              </select>
               <select id="ff" onchange="renderHist()" style="width:110px"><option value="">All Factory</option><option>TGT1</option><option>TGT2</option><option>TGT3</option><option>TGRT</option><option>PDO</option></select>
             </div>
             <div class="abar-r">
@@ -463,7 +485,13 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
       <div class="fg full"><label class="lbl">Full Name <span class="req">*</span></label><input type="text" id="mu-name" placeholder="ชื่อ-นามสกุล"></div>
       <div class="fg"><label class="lbl">Email</label><input type="email" id="mu-email" placeholder="email@tgt.co.th"></div>
       <div class="fg"><label class="lbl">Role</label>
-        <select id="mu-role"><option value="viewer">Viewer (ดูอย่างเดียว)</option><option value="buyer">Buyer (สร้าง Request)</option><option value="admin">Admin (เต็มสิทธิ์)</option></select></div>
+        <select id="mu-role">
+          <option value="viewer">Viewer (ดูอย่างเดียว)</option>
+          <option value="accounting">Accounting (ตรวจงบ)</option>
+          <option value="buyer">Buyer (จัดซื้อ)</option>
+          <option value="marketing">Marketing (อนุมัติ)</option>
+          <option value="admin">Admin (เต็มสิทธิ์)</option>
+        </select></div>
       <div class="fg"><label class="lbl">Department</label><input type="text" id="mu-dept" placeholder="เช่น PR30"></div>
     </div>
     <div class="modal-footer">
@@ -479,10 +507,48 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
 <script>
 // ── USERS DB ───────────────────────────────────────────────────
 let USERS = JSON.parse(localStorage.getItem('gtap_users') || 'null') || [
-  {id:1, username:'admin', password:'admin123', name:'Admin User', email:'admin@tgt.co.th', role:'admin', dept:'IT'},
-  {id:2, username:'buyer', password:'buyer123', name:'Buyer สมชาย', email:'buyer@tgt.co.th', role:'buyer', dept:'PR30'},
-  {id:3, username:'viewer', password:'view123', name:'Viewer ทดสอบ', email:'viewer@tgt.co.th', role:'viewer', dept:'QA'},
+  {id:1, username:'admin',  password:'admin123', name:'Admin User',       email:'admin@tgt.co.th', role:'admin',      dept:'IT'},
+  {id:2, username:'acct',   password:'acct123',  name:'บัญชี สมหญิง',    email:'acct@tgt.co.th',  role:'accounting', dept:'ACC'},
+  {id:3, username:'buyer',  password:'buyer123', name:'Buyer สมชาย',     email:'buyer@tgt.co.th', role:'buyer',      dept:'PR30'},
+  {id:4, username:'mkt',    password:'mkt123',   name:'Marketing สมศรี', email:'mkt@tgt.co.th',   role:'marketing',  dept:'MKT'},
+  {id:5, username:'viewer', password:'view123',  name:'Viewer ทดสอบ',    email:'viewer@tgt.co.th',role:'viewer',     dept:'QA'},
 ];
+
+const STATUS_LABEL = {
+  'Pending':       'รอบัญชีตรวจ',
+  'Acct_Approved': 'รอ Buyer',
+  'Buyer_Approved':'รอ Marketing',
+  'Rejected':      'Rejected',
+  'Mkt_Approved':  'รอสรุป PO',
+  'Mkt_Returned':  'ส่งคืน Buyer',
+  'Done':          'Done ✅',
+};
+const STATUS_CLS = {
+  'Pending':       'b-pending',
+  'Acct_Approved': 'b-acct',
+  'Buyer_Approved':'b-buyer-app',
+  'Rejected':      'b-rejected',
+  'Mkt_Approved':  'b-mkt-app',
+  'Mkt_Returned':  'b-mkt-ret',
+  'Done':          'b-done',
+};
+
+function getAvailableActions(r) {
+  const role = CU?.role;
+  const s = r.status;
+  if (!role) return [];
+  if (role === 'accounting' && s === 'Pending')
+    return [{to:'Acct_Approved', label:'ตรวจงบผ่าน ✓', cls:'btn-accent'}];
+  if (role === 'buyer' && s === 'Acct_Approved')
+    return [{to:'Buyer_Approved', label:'เก็บได้ ✓', cls:'btn-success'}, {to:'Rejected', label:'เก็บไม่ได้ ✗', cls:'btn-danger'}];
+  if (role === 'marketing' && s === 'Buyer_Approved')
+    return [{to:'Mkt_Approved', label:'อนุมัติ ✓', cls:'btn-success'}, {to:'Mkt_Returned', label:'ส่งคืน Buyer', cls:'btn-warning'}];
+  if (role === 'buyer' && s === 'Mkt_Approved')
+    return [{to:'Done', label:'สรุป PO Done ✅', cls:'btn-success'}];
+  if (role === 'buyer' && s === 'Mkt_Returned')
+    return [{to:'Buyer_Approved', label:'แก้แล้ว → Marketing ใหม่', cls:'btn-accent'}];
+  return [];
+}
 let DB = JSON.parse(localStorage.getItem('gtap_db2') || '[]');
 let LOGS = JSON.parse(localStorage.getItem('gtap_logs') || '[]');
 let CU = null; // current user
@@ -508,7 +574,8 @@ function doLogin() {
   document.getElementById('app').style.display = 'block';
   document.getElementById('sb-avatar').textContent = found.name[0].toUpperCase();
   document.getElementById('sb-uname').textContent = found.name;
-  document.getElementById('sb-urole').textContent = found.role === 'admin' ? 'Administrator' : found.role === 'buyer' ? 'Buyer' : 'Viewer';
+  const roleLabel = {admin:'Administrator',accounting:'Accounting',buyer:'Buyer',marketing:'Marketing',viewer:'Viewer'};
+  document.getElementById('sb-urole').textContent = roleLabel[found.role] || found.role;
   // Admin-only items
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = found.role === 'admin' ? '' : 'none';
@@ -643,12 +710,12 @@ function submitReq() {
     factory:V('f-fac'), userName:V('f-uname'), dept:V('f-dept'), section:V('f-sec'),
     ext:V('f-ext'), email:V('f-email'), purpose:purpose.join(', '), orderType:ot.join(', '),
     purposeDesc:V('f-pdesc'), productType:VC('pt'), remark:V('f-rmk'),
-    payment:V('f-pay'), status:V('f-sta'), products:getRows(),
+    payment:V('f-pay'), status:'Pending', products:getRows(),
     createdAt:new Date().toISOString(), createdBy:CU?.name||''
   };
   DB.unshift(r); saveDB(); updateBadge();
   addLog(`สร้าง Request ${r.docNo} โดย ${r.userName}`);
-  simulateEmail(r, 'new');
+  sendNotification(r, 'new');
   clearForm(); showPage('dash');
   toast(`บันทึกสำเร็จ! ${r.docNo}`);
 }
@@ -657,55 +724,69 @@ function clearForm() {
   ['f-iss','f-rdt','f-uname','f-dept','f-sec','f-ext','f-pdesc','f-rmk'].forEach(id=>{const e=document.getElementById(id);if(e){e.value='';e.classList.remove('err');}});
   document.getElementById('f-fac').value='';
   document.getElementById('f-pay').value='';
-  document.getElementById('f-sta').value='Pending';
   document.getElementById('f-email').value = CU?.email || '';
   document.querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=false);
   document.getElementById('prod-body').innerHTML=`<tr id="empty-row"><td colspan="18" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>`;
   rowIds=[]; genDoc();
 }
 
-// ── EMAIL SIMULATION ──────────────────────────────────────────
-function simulateEmail(r, eventType) {
-  const adminEmails = USERS.filter(u=>u.role==='admin').map(u=>u.email).join(', ');
-  if (eventType==='new') {
-    console.log(`[EMAIL SIMULATED]
-To: ${adminEmails}
-Subject: [G-TAP] New Sourcing Request - ${r.docNo}
-Body: Request ${r.docNo} จาก ${r.userName} (${r.dept}) กรุณาตรวจสอบและ Approve ใน G-TAP System`);
-    toast(`📧 Email แจ้ง Admin แล้ว (Simulated)`, 'ok');
-  } else if (eventType==='approve') {
-    console.log(`[EMAIL SIMULATED]
-To: ${r.email}
-Subject: [G-TAP] Request ${r.docNo} - ${r.status}
-Body: Request ${r.docNo} ของคุณได้รับการ ${r.status} แล้ว`);
-    toast(`📧 Email แจ้ง ${r.userName} แล้ว (Simulated)`, 'ok');
-  }
+// ── EMAIL NOTIFICATION ────────────────────────────────────────
+async function sendNotification(r, event) {
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(()=>ctrl.abort(), 4000);
+    const res = await fetch('/api/notify', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({event, docNo:r.docNo, status:r.status, email:r.email, userName:r.userName, dept:r.dept, factory:r.factory}),
+      signal: ctrl.signal
+    });
+    clearTimeout(tid);
+    if (res.ok) {
+      const j = await res.json();
+      const sent = j.to?.length ? `→ ${j.to.join(', ')}` : '';
+      toast(`📧 Email ส่งแล้ว ${sent}`, 'ok');
+      return;
+    }
+  } catch(e) {}
+  // Fallback: local simulation
+  const roleMap = {new:'accounting',Acct_Approved:'buyer',Buyer_Approved:'marketing',Rejected:'requester',Mkt_Approved:'buyer',Mkt_Returned:'buyer',Done:'admin'};
+  const targetRole = roleMap[event] || 'admin';
+  const targets = targetRole==='requester' ? (r.email||'requester') : USERS.filter(u=>u.role===targetRole).map(u=>u.email).join(', ')||'(ไม่มี '+targetRole+')';
+  console.log(`[EMAIL SIMULATED] event=${event} docNo=${r.docNo} → ${targets}`);
+  toast(`📧 Email (Simulated) → ${targetRole}`, 'ok');
 }
 
 function testEmail() {
-  toast('📧 Test Email ส่งแล้ว (Simulated) — ดู Console สำหรับรายละเอียด', 'ok');
-  console.log('[TEST EMAIL] SMTP:', document.getElementById('sender-email').value, '→ All admins');
+  toast('📧 Test Email — ดู Console สำหรับรายละเอียด', 'ok');
+  console.log('[TEST EMAIL] target: accounting/buyer/marketing roles');
 }
 
 // ── STATUS UPDATE ─────────────────────────────────────────────
 function updateStatus(id, newStatus) {
-  if (CU?.role !== 'admin') { toast('ต้องเป็น Admin ถึงจะ Approve/Reject ได้', 'err'); return; }
   const r = DB.find(x=>x.id===id);
   if (!r) return;
+  const actions = getAvailableActions(r);
+  const isAdmin = CU?.role === 'admin';
+  if (!isAdmin && !actions.find(a=>a.to===newStatus)) {
+    toast('ไม่มีสิทธิ์อัปเดต Status นี้', 'err'); return;
+  }
   r.status = newStatus;
   r.updatedAt = new Date().toISOString();
   r.updatedBy = CU?.name;
   saveDB(); renderHist(); renderDash(); renderCharts();
-  addLog(`${CU.name} ${newStatus} Request ${r.docNo}`, newStatus==='Approved'?'ok':'err');
-  simulateEmail(r, 'approve');
-  toast(`${r.docNo} → ${newStatus}`);
+  const lbl = STATUS_LABEL[newStatus] || newStatus;
+  addLog(`${CU.name} → ${lbl} (${r.docNo})`, newStatus==='Rejected'?'err':'ok');
+  sendNotification(r, newStatus);
+  toast(`${r.docNo} → ${lbl}`);
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────
 function renderDash() {
+  const inProgress = ['Pending','Acct_Approved','Buyer_Approved','Mkt_Approved','Mkt_Returned'];
   document.getElementById('s0').textContent=DB.length;
-  document.getElementById('s1').textContent=DB.filter(r=>r.status==='Pending').length;
-  document.getElementById('s2').textContent=DB.filter(r=>r.status==='Approved').length;
+  document.getElementById('s1').textContent=DB.filter(r=>inProgress.includes(r.status)).length;
+  document.getElementById('s2').textContent=DB.filter(r=>r.status==='Done').length;
   document.getElementById('s3').textContent=DB.reduce((s,r)=>s+(r.products?.length||0),0);
   const el=document.getElementById('dash-recent');
   if(!DB.length){el.innerHTML=`<div class="empty"><i class="ti ti-inbox"></i><p>ยังไม่มี Request</p></div>`;} else {el.innerHTML=DB.slice(0,5).map(r=>rcHtml(r,false)).join('');}
@@ -731,12 +812,18 @@ function fmtTime(iso) {
 let charts = {};
 function renderCharts() {
   // Status Pie
-  const pending=DB.filter(r=>r.status==='Pending').length;
-  const approved=DB.filter(r=>r.status==='Approved').length;
-  const rejected=DB.filter(r=>r.status==='Rejected').length;
+  const stMap = {
+    'รอบัญชีตรวจ': DB.filter(r=>r.status==='Pending').length,
+    'รอ Buyer':     DB.filter(r=>r.status==='Acct_Approved').length,
+    'รอ Marketing': DB.filter(r=>r.status==='Buyer_Approved').length,
+    'รอสรุป PO':    DB.filter(r=>r.status==='Mkt_Approved').length,
+    'ส่งคืน Buyer': DB.filter(r=>r.status==='Mkt_Returned').length,
+    'Rejected':     DB.filter(r=>r.status==='Rejected').length,
+    'Done':         DB.filter(r=>r.status==='Done').length,
+  };
   mkChart('chart-status','doughnut',
-    ['Pending','Approved','Rejected'],[pending,approved,rejected],
-    ['#f59e0b','#10b981','#ef4444']);
+    Object.keys(stMap), Object.values(stMap),
+    ['#f59e0b','#3b82f6','#eab308','#22c55e','#f97316','#ef4444','#16a34a']);
 
   // Factory Bar
   const factories=['TGT1','TGT2','TGT3','TGRT','PDO'];
@@ -787,22 +874,23 @@ function renderHist() {
   el.innerHTML=list.map(r=>rcHtml(r,true)).join('');
 }
 
-function sBadge(s){const m={Pending:'b-pending',Approved:'b-approved',Rejected:'b-rejected'};return `<span class="badge ${m[s]||''}">${s}</span>`;}
+function sBadge(s){return `<span class="badge ${STATUS_CLS[s]||'b-pending'}">${STATUS_LABEL[s]||s}</span>`;}
 
 function rcHtml(r, showAct) {
-  const cls=(r.status||'').toLowerCase();
+  const cls=(r.status||'').toLowerCase().replace('_','_');
   const isAdmin = CU?.role === 'admin';
-  return `<div class="req-card ${cls}">
+  const allStatuses = ['Pending','Acct_Approved','Buyer_Approved','Rejected','Mkt_Approved','Mkt_Returned','Done'];
+  const roleActions = showAct ? getAvailableActions(r) : [];
+  return `<div class="req-card ${r.status?.toLowerCase().replace(/_/g,'_')}">
     <div class="rc-head">
       <span class="rc-docno"><i class="ti ti-file-description" style="font-size:13px;margin-right:3px"></i>${r.docNo}</span>
       <div class="rc-actions">
         ${sBadge(r.status)}
         ${showAct && isAdmin ? `
           <select class="status-select ${r.status}" onchange="updateStatus(${r.id},this.value)" onclick="event.stopPropagation()">
-            <option ${r.status==='Pending'?'selected':''}>Pending</option>
-            <option ${r.status==='Approved'?'selected':''}>Approved</option>
-            <option ${r.status==='Rejected'?'selected':''}>Rejected</option>
+            ${allStatuses.map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${STATUS_LABEL[s]||s}</option>`).join('')}
           </select>` : ''}
+        ${roleActions.map(a=>`<button class="btn btn-sm ${a.cls}" onclick="event.stopPropagation();updateStatus(${r.id},'${a.to}')">${a.label}</button>`).join('')}
         <button class="btn btn-sm btn-success" onclick="exportOne(${r.id})"><i class="ti ti-file-spreadsheet"></i></button>
         <button class="btn btn-sm btn-danger" onclick="exportPDF(${r.id})"><i class="ti ti-file-type-pdf"></i></button>
         ${showAct && isAdmin ? `<button class="btn btn-sm" style="color:var(--danger);border-color:#fca5a5" onclick="delReq(${r.id})"><i class="ti ti-trash"></i></button>` : ''}
@@ -837,7 +925,7 @@ function renderUsers() {
     <div class="user-row">
       <div class="u-avatar">${u.name[0].toUpperCase()}</div>
       <div class="u-info">
-        <div class="u-name">${u.name} <span class="badge ${u.role==='admin'?'b-admin':u.role==='buyer'?'b-viewer':''}" style="margin-left:5px">${u.role}</span></div>
+        <div class="u-name">${u.name} <span class="badge ${u.role==='admin'?'b-admin':u.role==='accounting'?'b-acct':u.role==='buyer'?'b-viewer':u.role==='marketing'?'b-mkt-app':''}" style="margin-left:5px">${u.role}</span></div>
         <div class="u-meta">${u.username} · ${u.email||'—'} · ${u.dept||'—'}</div>
       </div>
       <div style="display:flex;gap:6px">
