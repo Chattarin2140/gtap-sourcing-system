@@ -551,11 +551,12 @@ function getAvailableActions(r) {
 }
 let DB = JSON.parse(localStorage.getItem('gtap_db2') || '[]');
 let LOGS = JSON.parse(localStorage.getItem('gtap_logs') || '[]');
-let CU = null; // current user
+let CU = JSON.parse(localStorage.getItem('gtap_cu') || 'null');
 
 function saveDB() { localStorage.setItem('gtap_db2', JSON.stringify(DB)); }
 function saveUsers() { localStorage.setItem('gtap_users', JSON.stringify(USERS)); }
 function saveLogs() { localStorage.setItem('gtap_logs', JSON.stringify(LOGS)); }
+function saveCU() { localStorage.setItem('gtap_cu', JSON.stringify(CU)); }
 
 function addLog(msg, type='ok') {
   LOGS.unshift({msg, type, time: new Date().toISOString()});
@@ -570,27 +571,31 @@ function doLogin() {
   const found = USERS.find(x => (x.username===u || x.email===u) && x.password===p);
   if (!found) { document.getElementById('login-err').style.display='block'; return; }
   CU = found;
+  saveCU();
+  applySession(found);
+  addLog(`${found.name} เข้าสู่ระบบ`);
+}
+
+function applySession(found) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('sb-avatar').textContent = found.name[0].toUpperCase();
   document.getElementById('sb-uname').textContent = found.name;
   const roleLabel = {admin:'Administrator',accounting:'Accounting',buyer:'Buyer',marketing:'Marketing',viewer:'Viewer'};
   document.getElementById('sb-urole').textContent = roleLabel[found.role] || found.role;
-  // Admin-only items
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = found.role === 'admin' ? '' : 'none';
   });
-  // Prefill form
   document.getElementById('f-uname').value = found.name;
   document.getElementById('f-dept').value = found.dept || '';
   document.getElementById('f-email').value = found.email || '';
   updateBadge(); renderDash();
-  addLog(`${found.name} เข้าสู่ระบบ`);
 }
 
 function doLogout() {
   addLog(`${CU?.name} ออกจากระบบ`, 'warn');
   CU = null;
+  localStorage.removeItem('gtap_cu');
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('li-user').value = '';
@@ -1073,7 +1078,11 @@ function exportPDFAll() {
 }
 
 // ── INIT ─────────────────────────────────────────────────────
-updateBadge();
+if (CU) {
+  applySession(CU);
+} else {
+  updateBadge();
+}
 </script>
 </body>
 </html>
