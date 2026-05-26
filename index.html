@@ -322,6 +322,17 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
 
         <!-- NEW REQUEST -->
         <div class="page" id="page-new">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;background:#f0fdf4;border:1.5px dashed #86efac;border-radius:12px;padding:14px 18px">
+            <i class="ti ti-file-spreadsheet" style="font-size:22px;color:#16a34a"></i>
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:14px;color:#15803d">Import from Excel</div>
+              <div style="font-size:12px;color:#4ade80">อัปโหลดไฟล์ G-TAP Excel Format เพื่อกรอกฟอร์มอัตโนมัติ</div>
+            </div>
+            <button class="btn btn-success btn-sm" onclick="document.getElementById('xls-file').click()">
+              <i class="ti ti-upload"></i> เลือกไฟล์ .xlsx
+            </button>
+            <input type="file" id="xls-file" accept=".xlsx" style="display:none" onchange="importExcel(this.files[0])">
+          </div>
           <div class="card">
             <div class="card-title"><i class="ti ti-id"></i> Header Information</div>
             <div class="form-grid c4">
@@ -1037,6 +1048,82 @@ async function removeUser(id) {
   if (res.error) { toast('เกิดข้อผิดพลาด: '+res.error, 'err'); return; }
   await loadData(); renderUsers();
   toast('ลบ User เรียบร้อย');
+}
+
+// ── EXCEL IMPORT ──────────────────────────────────────────────
+async function importExcel(file) {
+  if (!file) return;
+  const btn = document.querySelector('#xls-file').previousElementSibling;
+  const origText = btn.innerHTML;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i> กำลังอ่าน...';
+  btn.disabled = true;
+
+  const form = new FormData();
+  form.append('file', file);
+  let data;
+  try {
+    const res = await fetch('/api/import-excel', { method: 'POST', body: form });
+    data = await res.json();
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.innerHTML = origText; btn.disabled = false;
+    document.getElementById('xls-file').value = '';
+    return;
+  }
+  btn.innerHTML = origText; btn.disabled = false;
+  document.getElementById('xls-file').value = '';
+
+  if (data.error) { alert('Import ไม่สำเร็จ: ' + data.error); return; }
+
+  clearForm();
+
+  const h = data.header || {};
+  const sv = (id, v) => { const el=document.getElementById(id); if(el && v) el.value = v; };
+  sv('f-iss',   h.issueDate);
+  sv('f-rdt',   h.requestDate);
+  sv('f-uname', h.userName);
+  sv('f-dept',  h.dept);
+  sv('f-sec',   h.section);
+  sv('f-ext',   h.ext);
+  sv('f-email', h.email);
+  sv('f-pdesc', h.purposeDesc);
+
+  // Factory dropdown (match partial)
+  if (h.factory) {
+    const fac = document.getElementById('f-fac');
+    const opt = [...fac.options].find(o => o.value && h.factory.toUpperCase().includes(o.value));
+    if (opt) fac.value = opt.value; else fac.value = h.factory;
+  }
+
+  // Purpose checkboxes
+  const pt = (h.purpose || '').toLowerCase();
+  document.getElementById('f-pm').checked = pt.includes('market') || pt.includes('marker');
+  document.getElementById('f-pp').checked = pt.includes('purchase');
+
+  // Products
+  for (const p of (data.products || [])) {
+    addRow();
+    const id = rowCnt;
+    const pv = (field, val) => { const el=document.getElementById(`r${id}${field}`); if(el && val !== undefined && val !== '') el.value = val; };
+    pv('m',  p.model);
+    pv('p',  p.partNo);
+    pv('n',  p.name);
+    pv('q',  p.qty);
+    pv('u',  p.unit);
+    pv('b',  p.budget);
+    pv('gc', p.gtapCode);
+    pv('gn', p.gtapName);
+    pv('no', p.newOld);
+    pv('sc', p.supCode);
+    pv('sn', p.supName);
+    pv('lt', p.leadTime);
+    pv('cy', p.currency?.split('/')[0]?.trim() || 'THB');
+    pv('pr', p.price);
+    pv('mq', p.moq);
+    pv('rm', p.remark);
+  }
+
+  toast(`Import สำเร็จ: ${data.products?.length || 0} รายการ`);
 }
 
 // ── EXCEL EXPORT ──────────────────────────────────────────────

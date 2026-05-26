@@ -464,6 +464,87 @@ def get_logs():
         rows = res.data or []
     return jsonify(rows)
 
+@app.route('/api/import-excel', methods=['POST'])
+def import_excel():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    f = request.files['file']
+    try:
+        import openpyxl, io
+        wb = openpyxl.load_workbook(io.BytesIO(f.read()), data_only=True)
+    except Exception as e:
+        return jsonify({'error': f'Cannot open file: {e}'}), 400
+
+    def cell(rows, r, c):
+        try: v = rows[r][c]; return v if v is not None else ''
+        except: return ''
+
+    def fmt_date(v):
+        if hasattr(v, 'strftime'): return v.strftime('%Y-%m-%d')
+        return str(v) if v else ''
+
+    # ── Header (first sheet, rows are 0-indexed) ──────────────
+    ws0 = wb.worksheets[0]
+    rows0 = list(ws0.iter_rows(values_only=True))
+    # Excel rows 3-11 = Python indices 2-10 (file has 2 blank rows at top)
+    # Row 4 (idx 3): Issue Date(C=2), Purpose text(O=14), Doc No(W=22)
+    # Row 5 (idx 4): Request Date(C=2)
+    # Row 6 (idx 5): Factory(C=2)
+    # Row 7 (idx 6): User Name(C=2)
+    # Row 8 (idx 7): Dept(C=2), Purpose Desc(O=14)
+    # Row 9 (idx 8): Section(C=2)
+    # Row 10 (idx 9): Ext(C=2)
+    # Row 11 (idx 10): Email(C=2)
+    header = {
+        'issueDate':   fmt_date(cell(rows0, 3, 2)),
+        'requestDate': fmt_date(cell(rows0, 4, 2)),
+        'factory':     str(cell(rows0, 5, 2)),
+        'userName':    str(cell(rows0, 6, 2)),
+        'dept':        str(cell(rows0, 7, 2)),
+        'section':     str(cell(rows0, 8, 2)),
+        'ext':         str(cell(rows0, 9, 2)),
+        'email':       str(cell(rows0, 10, 2)),
+        'purpose':     str(cell(rows0, 3, 14)),
+        'purposeDesc': str(cell(rows0, 7, 14)),
+        'docNo':       str(cell(rows0, 3, 22)),
+    }
+
+    # ── Products (all sheets except first) ────────────────────
+    products = []
+    for ws in wb.worksheets[1:]:
+        rows_p = list(ws.iter_rows(values_only=True))
+        i = 0
+        while i < len(rows_p):
+            r1 = rows_p[i]
+            seq = r1[0] if r1 else None
+            # product data row: col A is a positive integer
+            if isinstance(seq, (int, float)) and not isinstance(seq, bool) and seq == int(seq) and int(seq) > 0:
+                r2 = rows_p[i + 1] if i + 1 < len(rows_p) else [None] * 26
+                new_old = 'P' if r1[10] else ('O' if (len(r1) > 11 and r1[11]) else 'P')
+                products.append({
+                    'model':    str(r1[1] or ''),
+                    'partNo':   str(r1[2] or ''),
+                    'name':     str(r2[2] or ''),
+                    'qty':      str(r1[3] or '1'),
+                    'unit':     str(r1[4] or 'Set'),
+                    'budget':   str(r1[8] or ''),
+                    'gtapCode': str(r1[9] or ''),
+                    'gtapName': str(r2[9] or ''),
+                    'newOld':   new_old,
+                    'supCode':  str(r1[12] or ''),
+                    'supName':  str(r2[12] or ''),
+                    'leadTime': str(r1[13] or ''),
+                    'currency': str(r1[14] or 'THB'),
+                    'price':    str(r2[14] or ''),
+                    'moq':      str(r1[18] or '1'),
+                    'remark':   str(r1[25] if len(r1) > 25 and r1[25] else ''),
+                })
+                i += 2
+            else:
+                i += 1
+
+    return jsonify({'header': header, 'products': products})
+
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
