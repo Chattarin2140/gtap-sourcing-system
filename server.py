@@ -13,7 +13,13 @@ app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
 CORS(app)
 
 # ── DATABASE BACKEND ──────────────────────────────────────────
-POSTGRES_URL = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL')
+_SUPABASE_URL = 'postgresql://postgres:0947659808Rin%40@db.ppixmnxrnykaieenyaxh.supabase.co:5432/postgres?sslmode=require'
+
+POSTGRES_URL = (
+    os.environ.get('POSTGRES_URL') or
+    os.environ.get('DATABASE_URL') or
+    (_SUPABASE_URL if os.environ.get('VERCEL') else None)
+)
 USE_SQLITE = not bool(POSTGRES_URL)
 
 if USE_SQLITE:
@@ -24,6 +30,7 @@ if USE_SQLITE:
 else:
     import psycopg2, psycopg2.extras
     PH = '%s'
+    print('Production: using PostgreSQL')
 
 # ── EMAIL CONFIG ──────────────────────────────────────────────
 SMTP_HOST  = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
