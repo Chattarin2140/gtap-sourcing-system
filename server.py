@@ -8,6 +8,7 @@ import os, smtplib
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from urllib.parse import urlparse, unquote
 
 app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
 CORS(app)
@@ -35,9 +36,24 @@ if USE_SQLITE:
     PH = '?'
     print('Local dev: using SQLite →', SQLITE_PATH)
 else:
-    import psycopg2, psycopg2.extras
+    import pg8000.dbapi as pgdb
     PH = '%s'
-    print('Production: using PostgreSQL →', POSTGRES_URL[:40], '...')
+    print('Production: using PostgreSQL (pg8000) →', POSTGRES_URL[:40], '...')
+
+    class _DictCursor:
+        """Wraps pg8000 cursor to return dicts instead of tuples."""
+        def __init__(self, c):
+            self._c = c
+        def execute(self, sql, params=None):
+            self._c.execute(sql, list(params) if params is not None else None)
+        def fetchone(self):
+            row = self._c.fetchone()
+            if row is None: return None
+            return dict(zip([d[0] for d in self._c.description], row))
+        def fetchall(self):
+            if not self._c.description: return []
+            cols = [d[0] for d in self._c.description]
+            return [dict(zip(cols, r)) for r in self._c.fetchall()]
 
 # ── EMAIL CONFIG ──────────────────────────────────────────────
 SMTP_HOST  = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
@@ -53,12 +69,21 @@ def get_db():
         conn.row_factory = sqlite3.Row
         conn.execute('PRAGMA foreign_keys = ON')
         return conn
-    return psycopg2.connect(POSTGRES_URL, connect_timeout=5)
+    u = urlparse(POSTGRES_URL)
+    return pgdb.connect(
+        host=u.hostname,
+        port=u.port or 5432,
+        database=u.path.lstrip('/'),
+        user=unquote(u.username),
+        password=unquote(u.password),
+        ssl_context=True,
+        timeout=10,
+    )
 
 def cur(conn):
     if USE_SQLITE:
         return conn.cursor()
-    return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    return _DictCursor(conn.cursor())
 
 def to_dict(row):
     return dict(row) if row else None
@@ -71,7 +96,7 @@ def insert_get_id(c, sql, params):
         c.execute(sql, params)
         return c.lastrowid
     c.execute(sql + ' RETURNING id', params)
-    return dict(c.fetchone())['id']
+    return c.fetchone()['id']
 
 def init_db():
     conn = get_db()
@@ -122,8 +147,8 @@ def init_db():
               ('viewer', 'view123',  'Viewer ทดสอบ',    'viewer@tgt.co.th', 'viewer',     'QA');
         ''')
     else:
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS users (
+        stmts = [
+            '''CREATE TABLE IF NOT EXISTS users (
                 id         SERIAL PRIMARY KEY,
                 username   TEXT UNIQUE NOT NULL,
                 password   TEXT NOT NULL,
@@ -132,8 +157,8 @@ def init_db():
                 role       TEXT DEFAULT 'viewer',
                 dept       TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
-            );
-            CREATE TABLE IF NOT EXISTS requests (
+            )''',
+            '''CREATE TABLE IF NOT EXISTS requests (
                 id           SERIAL PRIMARY KEY,
                 doc_no       TEXT UNIQUE,
                 issue_date   TEXT, request_date TEXT, factory TEXT,
@@ -143,30 +168,32 @@ def init_db():
                 created_by   TEXT, updated_by TEXT,
                 created_at   TIMESTAMP DEFAULT NOW(),
                 updated_at   TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS products (
+            )''',
+            '''CREATE TABLE IF NOT EXISTS products (
                 id         SERIAL PRIMARY KEY,
                 request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
                 seq INTEGER, model TEXT, part_no TEXT, name TEXT,
                 qty TEXT, unit TEXT, budget TEXT, gtap_code TEXT, gtap_name TEXT,
                 new_old TEXT, sup_code TEXT, sup_name TEXT,
                 lead_time TEXT, currency TEXT, price TEXT, moq TEXT, prod_remark TEXT
-            );
-            CREATE TABLE IF NOT EXISTS activity_log (
+            )''',
+            '''CREATE TABLE IF NOT EXISTS activity_log (
                 id         SERIAL PRIMARY KEY,
                 msg        TEXT,
                 type       TEXT DEFAULT 'ok',
                 "user"     TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
-            );
-            INSERT INTO users (username,password,name,email,role,dept) VALUES
+            )''',
+            '''INSERT INTO users (username,password,name,email,role,dept) VALUES
               ('admin',  'admin123', 'Admin User',       'admin@tgt.co.th',  'admin',      'IT'),
               ('acct',   'acct123',  'บัญชี สมหญิง',    'acct@tgt.co.th',   'accounting', 'ACC'),
               ('buyer',  'buyer123', 'Buyer สมชาย',     'buyer@tgt.co.th',  'buyer',      'PR30'),
               ('mkt',    'mkt123',   'Marketing สมศรี', 'mkt@tgt.co.th',    'marketing',  'MKT'),
               ('viewer', 'view123',  'Viewer ทดสอบ',    'viewer@tgt.co.th', 'viewer',     'QA')
-            ON CONFLICT (username) DO NOTHING;
-        ''')
+            ON CONFLICT (username) DO NOTHING''',
+        ]
+        for stmt in stmts:
+            c.execute(stmt)
     conn.commit()
     conn.close()
     print('DB ready')
