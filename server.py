@@ -271,6 +271,24 @@ def create_user():
             return jsonify({'error': 'Username already exists'}), 400
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/users/<int:uid>', methods=['PUT'])
+def update_user(uid):
+    d = request.json or {}
+    if not d.get('name'):
+        return jsonify({'error': 'Missing name'}), 400
+    conn = get_db()
+    c = conn.cursor()
+    fields = f'name={PH}, email={PH}, role={PH}, dept={PH}'
+    params = [d['name'], d.get('email',''), d.get('role','viewer'), d.get('dept','')]
+    if d.get('password'):
+        fields += f', password={PH}'
+        params.append(d['password'])
+    params.append(uid)
+    c.execute(f'UPDATE users SET {fields} WHERE id={PH}', params)
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Updated'})
+
 @app.route('/api/users/<int:uid>', methods=['DELETE'])
 def delete_user(uid):
     conn = get_db()
@@ -351,7 +369,8 @@ def create_request():
 def update_status(rid):
     d = request.json or {}
     status = d.get('status')
-    if status not in ('Pending', 'Approved', 'Rejected'):
+    VALID = {'Pending','Acct_Approved','Buyer_Approved','Rejected','Mkt_Approved','Mkt_Returned','Done'}
+    if status not in VALID:
         return jsonify({'error': 'Invalid status'}), 400
     conn = get_db()
     c = cur(conn)

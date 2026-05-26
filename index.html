@@ -532,14 +532,33 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
 <div id="toasts"></div>
 
 <script>
-// ── USERS DB ───────────────────────────────────────────────────
-let USERS = JSON.parse(localStorage.getItem('gtap_users') || 'null') || [
-  {id:1, username:'admin',  password:'admin123', name:'Admin User',       email:'admin@tgt.co.th', role:'admin',      dept:'IT'},
-  {id:2, username:'acct',   password:'acct123',  name:'บัญชี สมหญิง',    email:'acct@tgt.co.th',  role:'accounting', dept:'ACC'},
-  {id:3, username:'buyer',  password:'buyer123', name:'Buyer สมชาย',     email:'buyer@tgt.co.th', role:'buyer',      dept:'PR30'},
-  {id:4, username:'mkt',    password:'mkt123',   name:'Marketing สมศรี', email:'mkt@tgt.co.th',   role:'marketing',  dept:'MKT'},
-  {id:5, username:'viewer', password:'view123',  name:'Viewer ทดสอบ',    email:'viewer@tgt.co.th',role:'viewer',     dept:'QA'},
-];
+// ── API LAYER ─────────────────────────────────────────────────
+async function api(method, path, body) {
+  try {
+    const opts = { method, headers: {'Content-Type':'application/json'} };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    return await res.json();
+  } catch(e) { return {error: e.message}; }
+}
+
+// snake_case → camelCase map for request fields
+function toCamel(obj) {
+  const M = {doc_no:'docNo',user_name:'userName',issue_date:'issueDate',request_date:'requestDate',
+    order_type:'orderType',purpose_desc:'purposeDesc',product_type:'productType',
+    created_by:'createdBy',updated_by:'updatedBy',created_at:'createdAt',updated_at:'updatedAt',
+    part_no:'partNo',gtap_code:'gtapCode',gtap_name:'gtapName',new_old:'newOld',
+    sup_code:'supCode',sup_name:'supName',lead_time:'leadTime',prod_remark:'remark'};
+  const r = {};
+  for (const [k,v] of Object.entries(obj)) {
+    const key = M[k]||k;
+    r[key] = (k==='products'&&Array.isArray(v)) ? v.map(toCamel) : v;
+  }
+  return r;
+}
+
+// ── DATA (in-memory, loaded from API) ─────────────────────────
+let USERS = [];
 
 const STATUS_LABEL = {
   'Pending':       'รอบัญชีตรวจ',
@@ -576,31 +595,34 @@ function getAvailableActions(r) {
     return [{to:'Buyer_Approved', label:'แก้แล้ว → Marketing ใหม่', cls:'btn-accent'}];
   return [];
 }
-let DB = JSON.parse(localStorage.getItem('gtap_db2') || '[]');
-let LOGS = JSON.parse(localStorage.getItem('gtap_logs') || '[]');
+let DB = [];
+let LOGS = [];
 let CU = JSON.parse(localStorage.getItem('gtap_cu') || 'null');
 
-function saveDB() { localStorage.setItem('gtap_db2', JSON.stringify(DB)); }
-function saveUsers() { localStorage.setItem('gtap_users', JSON.stringify(USERS)); }
-function saveLogs() { localStorage.setItem('gtap_logs', JSON.stringify(LOGS)); }
-function saveCU() { localStorage.setItem('gtap_cu', JSON.stringify(CU)); }
-
-function addLog(msg, type='ok') {
-  LOGS.unshift({msg, type, time: new Date().toISOString()});
-  LOGS = LOGS.slice(0, 50);
-  saveLogs();
+async function loadData() {
+  const [reqs, users, logs] = await Promise.all([
+    api('GET', '/api/requests'),
+    api('GET', '/api/users'),
+    api('GET', '/api/logs'),
+  ]);
+  DB    = Array.isArray(reqs)  ? reqs.map(toCamel)  : [];
+  USERS = Array.isArray(users) ? users               : [];
+  LOGS  = Array.isArray(logs)  ? logs                : [];
+  updateBadge();
 }
 
+function addLog() {} // server logs automatically
+
 // ── AUTH ──────────────────────────────────────────────────────
-function doLogin() {
+async function doLogin() {
   const u = document.getElementById('li-user').value.trim();
   const p = document.getElementById('li-pass').value;
-  const found = USERS.find(x => (x.username===u || x.email===u) && x.password===p);
-  if (!found) { document.getElementById('login-err').style.display='block'; return; }
-  CU = found;
-  saveCU();
-  applySession(found);
-  addLog(`${found.name} เข้าสู่ระบบ`);
+  const res = await api('POST', '/api/login', {username:u, password:p});
+  if (res.error) { document.getElementById('login-err').style.display='block'; return; }
+  CU = res;
+  localStorage.setItem('gtap_cu', JSON.stringify(CU));
+  await loadData();
+  applySession(CU);
 }
 
 function applySession(found) {
@@ -620,8 +642,7 @@ function applySession(found) {
 }
 
 function doLogout() {
-  addLog(`${CU?.name} ออกจากระบบ`, 'warn');
-  CU = null;
+  CU = null; DB = []; USERS = []; LOGS = [];
   localStorage.removeItem('gtap_cu');
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
@@ -643,9 +664,9 @@ function showPage(id) {
   if (nav) nav.classList.add('active');
   document.getElementById('pg-title').textContent = pgs[id]||'';
   document.getElementById('pg-sub').textContent = subs[id]||'';
-  if (id==='dash') { renderDash(); renderCharts(); }
-  if (id==='hist') renderHist();
-  if (id==='users') renderUsers();
+  if (id==='dash') { loadData().then(()=>{renderDash();renderCharts();}); }
+  if (id==='hist') { loadData().then(renderHist); }
+  if (id==='users') { loadData().then(renderUsers); }
   if (id==='new') { genDoc(); initDates(); }
 }
 
@@ -723,11 +744,11 @@ function getRows() {
 
 function V(id){ const e=document.getElementById(id); return e?e.value:''; }
 function VC(name){ return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(c=>c.value).join(', '); }
-function genDoc(){ const y=new Date().getFullYear(); const s=String(DB.filter(r=>r.docNo.includes(y)).length+1).padStart(3,'0'); document.getElementById('f-doc').value=`PSB-${y}-${s}`; }
+function genDoc(){ document.getElementById('f-doc').value='(Auto)'; }
 function updateBadge(){ document.getElementById('nb-hist').textContent=DB.length; }
 
 // ── SUBMIT ────────────────────────────────────────────────────
-function submitReq() {
+async function submitReq() {
   if (CU?.role === 'viewer') { toast('ไม่มีสิทธิ์สร้าง Request', 'err'); return; }
   const req_fields = ['f-iss','f-rdt','f-fac','f-uname','f-dept','f-email'];
   let ok = true;
@@ -737,19 +758,22 @@ function submitReq() {
   const purpose=[]; if(document.getElementById('f-pm').checked)purpose.push('Market Price'); if(document.getElementById('f-pp').checked)purpose.push('Purchase Product');
   const ot=[]; ['f-ot1','f-ot2','f-ot3','f-ot4'].forEach((id,i)=>{ if(document.getElementById(id).checked) ot.push(['TGT/TGRT/PDO','TGAS/PPA','BOI','ODC'][i]); });
 
-  const r = {
-    id:Date.now(), docNo:V('f-doc'), issueDate:V('f-iss'), requestDate:V('f-rdt'),
-    factory:V('f-fac'), userName:V('f-uname'), dept:V('f-dept'), section:V('f-sec'),
+  const payload = {
+    issueDate:V('f-iss'), requestDate:V('f-rdt'), factory:V('f-fac'),
+    userName:V('f-uname'), dept:V('f-dept'), section:V('f-sec'),
     ext:V('f-ext'), email:V('f-email'), purpose:purpose.join(', '), orderType:ot.join(', '),
     purposeDesc:V('f-pdesc'), productType:VC('pt'), remark:V('f-rmk'),
-    payment:V('f-pay'), status:'Pending', products:getRows(),
-    createdAt:new Date().toISOString(), createdBy:CU?.name||''
+    payment:V('f-pay'), status:'Pending', products:getRows(), createdBy:CU?.name||''
   };
-  DB.unshift(r); saveDB(); updateBadge();
-  addLog(`สร้าง Request ${r.docNo} โดย ${r.userName}`);
-  sendNotification(r, 'new');
+
+  toast('กำลังบันทึก...', 'ok');
+  const res = await api('POST', '/api/requests', payload);
+  if (res.error) { toast('เกิดข้อผิดพลาด: '+res.error, 'err'); return; }
+
+  sendNotification({docNo:res.docNo, ...payload}, 'new');
+  await loadData();
   clearForm(); showPage('dash');
-  toast(`บันทึกสำเร็จ! ${r.docNo}`);
+  toast(`บันทึกสำเร็จ! ${res.docNo}`);
 }
 
 function clearForm() {
@@ -795,7 +819,7 @@ function testEmail() {
 }
 
 // ── STATUS UPDATE ─────────────────────────────────────────────
-function updateStatus(id, newStatus) {
+async function updateStatus(id, newStatus) {
   const r = DB.find(x=>x.id===id);
   if (!r) return;
   const actions = getAvailableActions(r);
@@ -803,13 +827,12 @@ function updateStatus(id, newStatus) {
   if (!isAdmin && !actions.find(a=>a.to===newStatus)) {
     toast('ไม่มีสิทธิ์อัปเดต Status นี้', 'err'); return;
   }
-  r.status = newStatus;
-  r.updatedAt = new Date().toISOString();
-  r.updatedBy = CU?.name;
-  saveDB(); renderHist(); renderDash(); renderCharts();
+  const res = await api('PATCH', `/api/requests/${id}/status`, {status:newStatus, updatedBy:CU?.name||''});
+  if (res.error) { toast('เกิดข้อผิดพลาด: '+res.error, 'err'); return; }
+  await loadData();
+  renderHist(); renderDash(); renderCharts();
   const lbl = STATUS_LABEL[newStatus] || newStatus;
-  addLog(`${CU.name} → ${lbl} (${r.docNo})`, newStatus==='Rejected'?'err':'ok');
-  sendNotification(r, newStatus);
+  sendNotification({...r, status:newStatus}, newStatus);
   toast(`${r.docNo} → ${lbl}`);
 }
 
@@ -831,7 +854,7 @@ function renderActivityLog() {
   el.innerHTML = LOGS.slice(0,8).map(l=>`
     <div class="log-item">
       <div class="log-dot ${l.type||'ok'}"></div>
-      <div><div class="log-text">${l.msg}</div><div class="log-time">${fmtTime(l.time)}</div></div>
+      <div><div class="log-text">${l.msg}</div><div class="log-time">${fmtTime(l.created_at||l.time)}</div></div>
     </div>`).join('');
 }
 
@@ -941,12 +964,12 @@ function rcHtml(r, showAct) {
   </div>`;
 }
 
-function delReq(id) {
+async function delReq(id) {
   if (!confirm('ลบ Request นี้?')) return;
-  const r = DB.find(x=>x.id===id);
-  DB = DB.filter(x=>x.id!==id);
-  saveDB(); updateBadge(); renderHist(); renderDash(); renderCharts();
-  addLog(`ลบ Request ${r?.docNo}`, 'err');
+  const res = await api('DELETE', `/api/requests/${id}`);
+  if (res.error) { toast('เกิดข้อผิดพลาด: '+res.error, 'err'); return; }
+  await loadData();
+  renderHist(); renderDash(); renderCharts();
   toast('ลบเรียบร้อย');
 }
 
@@ -980,42 +1003,39 @@ function openEditUser(id) {
   document.getElementById('modal-edit-user').classList.add('open');
 }
 
-function saveEditUser() {
+async function saveEditUser() {
   const id   = Number(document.getElementById('eu-id').value);
   const name = document.getElementById('eu-name').value.trim();
   if (!name) { toast('กรอกชื่อด้วย', 'err'); return; }
-  const u = USERS.find(x=>x.id===id);
-  if (!u) return;
-  u.name  = name;
-  u.email = document.getElementById('eu-email').value.trim();
-  u.role  = document.getElementById('eu-role').value;
-  u.dept  = document.getElementById('eu-dept').value.trim();
+  const body = {
+    name, email: document.getElementById('eu-email').value.trim(),
+    role: document.getElementById('eu-role').value,
+    dept: document.getElementById('eu-dept').value.trim(),
+  };
   const newPass = document.getElementById('eu-pass').value;
-  if (newPass) u.password = newPass;
-  // ถ้าแก้ user ที่ login อยู่ ให้ sync CU ด้วย
-  if (CU?.id === id) { CU = {...u}; saveCU(); }
-  saveUsers(); closeModal('modal-edit-user'); renderUsers();
-  addLog(`แก้ไข User: ${name}`);
+  if (newPass) body.password = newPass;
+  const res = await api('PUT', `/api/users/${id}`, body);
+  if (res.error) { toast('เกิดข้อผิดพลาด: '+res.error, 'err'); return; }
+  if (CU?.id === id) { CU = {...CU, ...body}; localStorage.setItem('gtap_cu', JSON.stringify(CU)); }
+  await loadData(); closeModal('modal-edit-user'); renderUsers();
   toast(`อัปเดต ${name} สำเร็จ`);
 }
 
-function addUser() {
+async function addUser() {
   const username=V('mu-user').trim(), password=V('mu-pass'), name=V('mu-name').trim();
   if (!username||!password||!name) { toast('กรอกข้อมูลให้ครบ', 'err'); return; }
-  if (USERS.find(u=>u.username===username)) { toast('Username นี้มีแล้ว', 'err'); return; }
-  USERS.push({id:Date.now(), username, password, name, email:V('mu-email'), role:V('mu-role'), dept:V('mu-dept')});
-  saveUsers(); closeModal('modal-user'); renderUsers();
-  addLog(`เพิ่ม User: ${name}`);
+  const res = await api('POST', '/api/users', {username, password, name, email:V('mu-email'), role:V('mu-role'), dept:V('mu-dept')});
+  if (res.error) { toast(res.error, 'err'); return; }
+  await loadData(); closeModal('modal-user'); renderUsers();
   toast(`เพิ่ม ${name} สำเร็จ`);
   ['mu-user','mu-pass','mu-name','mu-email','mu-dept'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
 }
 
-function removeUser(id) {
+async function removeUser(id) {
   if (!confirm('ลบ User นี้?')) return;
-  const u = USERS.find(x=>x.id===id);
-  USERS = USERS.filter(x=>x.id!==id);
-  saveUsers(); renderUsers();
-  addLog(`ลบ User: ${u?.name}`, 'err');
+  const res = await api('DELETE', `/api/users/${id}`);
+  if (res.error) { toast('เกิดข้อผิดพลาด: '+res.error, 'err'); return; }
+  await loadData(); renderUsers();
   toast('ลบ User เรียบร้อย');
 }
 
@@ -1139,7 +1159,7 @@ function exportPDFAll() {
 
 // ── INIT ─────────────────────────────────────────────────────
 if (CU) {
-  applySession(CU);
+  loadData().then(() => applySession(CU));
 } else {
   updateBadge();
 }
