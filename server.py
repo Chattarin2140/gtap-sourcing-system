@@ -12,13 +12,20 @@ from email.mime.multipart import MIMEMultipart
 app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
 CORS(app)
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    import traceback
+    return jsonify({'error': str(e), 'trace': traceback.format_exc()[-500:]}), 500
+
 # ── DATABASE BACKEND ──────────────────────────────────────────
-_SUPABASE_URL = 'postgresql://postgres:0947659808Rin%40@db.ppixmnxrnykaieenyaxh.supabase.co:5432/postgres?sslmode=require'
+# Supabase pooler (IPv4, transaction mode) — works from Vercel Lambda
+# Username must be postgres.<project-ref> for pooler
+_SUPABASE_POOL = 'postgresql://postgres.ppixmnxrnykaieenyaxh:0947659808Rin%40@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres'
 
 POSTGRES_URL = (
     os.environ.get('POSTGRES_URL') or
     os.environ.get('DATABASE_URL') or
-    (_SUPABASE_URL if os.environ.get('VERCEL') else None)
+    (_SUPABASE_POOL if os.environ.get('VERCEL') else None)
 )
 USE_SQLITE = not bool(POSTGRES_URL)
 
@@ -30,7 +37,7 @@ if USE_SQLITE:
 else:
     import psycopg2, psycopg2.extras
     PH = '%s'
-    print('Production: using PostgreSQL')
+    print('Production: using PostgreSQL →', POSTGRES_URL[:40], '...')
 
 # ── EMAIL CONFIG ──────────────────────────────────────────────
 SMTP_HOST  = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
