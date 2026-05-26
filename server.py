@@ -1,6 +1,6 @@
 """
 G-TAP Sourcing Request System v2 — Backend
-Flask + PostgreSQL (production) / SQLite (local dev) + Email Notification
+Flask + Supabase REST API (production) / SQLite (local dev) + Email Notification
 """
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -8,7 +8,6 @@ import os, smtplib
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from urllib.parse import urlparse, unquote
 
 app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
 CORS(app)
@@ -16,19 +15,18 @@ CORS(app)
 @app.errorhandler(Exception)
 def handle_exception(e):
     import traceback
-    return jsonify({'error': str(e), 'trace': traceback.format_exc()[-500:]}), 500
+    return jsonify({'error': str(e), 'trace': traceback.format_exc()[-800:]}), 500
 
 # ── DATABASE BACKEND ──────────────────────────────────────────
-# Supabase pooler (IPv4, transaction mode) — works from Vercel Lambda
-# Username must be postgres.<project-ref> for pooler
-_SUPABASE_POOL = 'postgresql://postgres.ppixmnxrnykaieenyaxh:0947659808Rin%40@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres'
-
-POSTGRES_URL = (
-    os.environ.get('POSTGRES_URL') or
-    os.environ.get('DATABASE_URL') or
-    (_SUPABASE_POOL if os.environ.get('VERCEL') else None)
+_SB_URL = 'https://ppixmnxrnykaieenyaxh.supabase.co'
+_SB_KEY = (
+    os.environ.get('SUPABASE_SERVICE_KEY') or
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6'
+    'InBwaXhtbnhybnlrYWllZW55YXhoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6'
+    'MTc3ODgyNTg4OCwiZXhwIjoyMDk0NDAxODg4fQ.xWjiTT87CPt4AVb366Oraeuv-13Db7K3d5BVVuE5x_Y'
 )
-USE_SQLITE = not bool(POSTGRES_URL)
+
+USE_SQLITE = not bool(os.environ.get('VERCEL'))
 
 if USE_SQLITE:
     import sqlite3
@@ -36,24 +34,9 @@ if USE_SQLITE:
     PH = '?'
     print('Local dev: using SQLite →', SQLITE_PATH)
 else:
-    import pg8000.dbapi as pgdb
-    PH = '%s'
-    print('Production: using PostgreSQL (pg8000) →', POSTGRES_URL[:40], '...')
-
-    class _DictCursor:
-        """Wraps pg8000 cursor to return dicts instead of tuples."""
-        def __init__(self, c):
-            self._c = c
-        def execute(self, sql, params=None):
-            self._c.execute(sql, list(params) if params is not None else None)
-        def fetchone(self):
-            row = self._c.fetchone()
-            if row is None: return None
-            return dict(zip([d[0] for d in self._c.description], row))
-        def fetchall(self):
-            if not self._c.description: return []
-            cols = [d[0] for d in self._c.description]
-            return [dict(zip(cols, r)) for r in self._c.fetchall()]
+    from supabase import create_client
+    sb = create_client(_SB_URL, _SB_KEY)
+    print('Production: using Supabase REST API')
 
 # ── EMAIL CONFIG ──────────────────────────────────────────────
 SMTP_HOST  = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
@@ -63,27 +46,12 @@ SMTP_PASS  = os.environ.get('SMTP_PASS', 'umqv uhyx dtyw pdnz')
 SENDER     = os.environ.get('SENDER',    'rinti256@gmail.com')
 NOTIFY_CC  = os.environ.get('NOTIFY_CC', 'rinti256@gmail.com')
 
+# ── SQLite helpers (local dev only) ──────────────────────────
 def get_db():
-    if USE_SQLITE:
-        conn = sqlite3.connect(SQLITE_PATH)
-        conn.row_factory = sqlite3.Row
-        conn.execute('PRAGMA foreign_keys = ON')
-        return conn
-    u = urlparse(POSTGRES_URL)
-    return pgdb.connect(
-        host=u.hostname,
-        port=u.port or 5432,
-        database=u.path.lstrip('/'),
-        user=unquote(u.username),
-        password=unquote(u.password),
-        ssl_context=True,
-        timeout=10,
-    )
-
-def cur(conn):
-    if USE_SQLITE:
-        return conn.cursor()
-    return _DictCursor(conn.cursor())
+    conn = sqlite3.connect(SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
+    return conn
 
 def to_dict(row):
     return dict(row) if row else None
@@ -91,122 +59,56 @@ def to_dict(row):
 def to_list(rows):
     return [dict(r) for r in rows]
 
-def insert_get_id(c, sql, params):
-    if USE_SQLITE:
-        c.execute(sql, params)
-        return c.lastrowid
-    c.execute(sql + ' RETURNING id', params)
-    return c.fetchone()['id']
-
 def init_db():
     conn = get_db()
     c = conn.cursor()
-    if USE_SQLITE:
-        c.executescript('''
-            CREATE TABLE IF NOT EXISTS users (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                username   TEXT UNIQUE NOT NULL,
-                password   TEXT NOT NULL,
-                name       TEXT,
-                email      TEXT,
-                role       TEXT DEFAULT 'viewer',
-                dept       TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS requests (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                doc_no       TEXT UNIQUE,
-                issue_date   TEXT, request_date TEXT, factory TEXT,
-                user_name    TEXT, dept TEXT, section TEXT, ext TEXT, email TEXT,
-                purpose      TEXT, order_type TEXT, purpose_desc TEXT, product_type TEXT,
-                remark TEXT, payment TEXT, status TEXT DEFAULT 'Pending',
-                created_by   TEXT, updated_by TEXT,
-                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at   TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS products (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
-                seq INTEGER, model TEXT, part_no TEXT, name TEXT,
-                qty TEXT, unit TEXT, budget TEXT, gtap_code TEXT, gtap_name TEXT,
-                new_old TEXT, sup_code TEXT, sup_name TEXT,
-                lead_time TEXT, currency TEXT, price TEXT, moq TEXT, prod_remark TEXT
-            );
-            CREATE TABLE IF NOT EXISTS activity_log (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                msg        TEXT,
-                type       TEXT DEFAULT 'ok',
-                "user"     TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            INSERT OR IGNORE INTO users (username,password,name,email,role,dept) VALUES
-              ('admin',  'admin123', 'Admin User',       'admin@tgt.co.th',  'admin',      'IT'),
-              ('acct',   'acct123',  'บัญชี สมหญิง',    'acct@tgt.co.th',   'accounting', 'ACC'),
-              ('buyer',  'buyer123', 'Buyer สมชาย',     'buyer@tgt.co.th',  'buyer',      'PR30'),
-              ('mkt',    'mkt123',   'Marketing สมศรี', 'mkt@tgt.co.th',    'marketing',  'MKT'),
-              ('viewer', 'view123',  'Viewer ทดสอบ',    'viewer@tgt.co.th', 'viewer',     'QA');
-        ''')
-    else:
-        stmts = [
-            '''CREATE TABLE IF NOT EXISTS users (
-                id         SERIAL PRIMARY KEY,
-                username   TEXT UNIQUE NOT NULL,
-                password   TEXT NOT NULL,
-                name       TEXT,
-                email      TEXT,
-                role       TEXT DEFAULT 'viewer',
-                dept       TEXT,
-                created_at TIMESTAMP DEFAULT NOW()
-            )''',
-            '''CREATE TABLE IF NOT EXISTS requests (
-                id           SERIAL PRIMARY KEY,
-                doc_no       TEXT UNIQUE,
-                issue_date   TEXT, request_date TEXT, factory TEXT,
-                user_name    TEXT, dept TEXT, section TEXT, ext TEXT, email TEXT,
-                purpose      TEXT, order_type TEXT, purpose_desc TEXT, product_type TEXT,
-                remark TEXT, payment TEXT, status TEXT DEFAULT 'Pending',
-                created_by   TEXT, updated_by TEXT,
-                created_at   TIMESTAMP DEFAULT NOW(),
-                updated_at   TIMESTAMP
-            )''',
-            '''CREATE TABLE IF NOT EXISTS products (
-                id         SERIAL PRIMARY KEY,
-                request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
-                seq INTEGER, model TEXT, part_no TEXT, name TEXT,
-                qty TEXT, unit TEXT, budget TEXT, gtap_code TEXT, gtap_name TEXT,
-                new_old TEXT, sup_code TEXT, sup_name TEXT,
-                lead_time TEXT, currency TEXT, price TEXT, moq TEXT, prod_remark TEXT
-            )''',
-            '''CREATE TABLE IF NOT EXISTS activity_log (
-                id         SERIAL PRIMARY KEY,
-                msg        TEXT,
-                type       TEXT DEFAULT 'ok',
-                "user"     TEXT,
-                created_at TIMESTAMP DEFAULT NOW()
-            )''',
-            '''INSERT INTO users (username,password,name,email,role,dept) VALUES
-              ('admin',  'admin123', 'Admin User',       'admin@tgt.co.th',  'admin',      'IT'),
-              ('acct',   'acct123',  'บัญชี สมหญิง',    'acct@tgt.co.th',   'accounting', 'ACC'),
-              ('buyer',  'buyer123', 'Buyer สมชาย',     'buyer@tgt.co.th',  'buyer',      'PR30'),
-              ('mkt',    'mkt123',   'Marketing สมศรี', 'mkt@tgt.co.th',    'marketing',  'MKT'),
-              ('viewer', 'view123',  'Viewer ทดสอบ',    'viewer@tgt.co.th', 'viewer',     'QA')
-            ON CONFLICT (username) DO NOTHING''',
-        ]
-        for stmt in stmts:
-            c.execute(stmt)
+    c.executescript('''
+        CREATE TABLE IF NOT EXISTS users (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            username   TEXT UNIQUE NOT NULL,
+            password   TEXT NOT NULL,
+            name       TEXT,
+            email      TEXT,
+            role       TEXT DEFAULT 'viewer',
+            dept       TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS requests (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            doc_no       TEXT UNIQUE,
+            issue_date   TEXT, request_date TEXT, factory TEXT,
+            user_name    TEXT, dept TEXT, section TEXT, ext TEXT, email TEXT,
+            purpose      TEXT, order_type TEXT, purpose_desc TEXT, product_type TEXT,
+            remark TEXT, payment TEXT, status TEXT DEFAULT 'Pending',
+            created_by   TEXT, updated_by TEXT,
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at   TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS products (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+            seq INTEGER, model TEXT, part_no TEXT, name TEXT,
+            qty TEXT, unit TEXT, budget TEXT, gtap_code TEXT, gtap_name TEXT,
+            new_old TEXT, sup_code TEXT, sup_name TEXT,
+            lead_time TEXT, currency TEXT, price TEXT, moq TEXT, prod_remark TEXT
+        );
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            msg        TEXT,
+            type       TEXT DEFAULT 'ok',
+            "user"     TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT OR IGNORE INTO users (username,password,name,email,role,dept) VALUES
+          ('admin',  'admin123', 'Admin User',       'admin@tgt.co.th',  'admin',      'IT'),
+          ('acct',   'acct123',  'บัญชี สมหญิง',    'acct@tgt.co.th',   'accounting', 'ACC'),
+          ('buyer',  'buyer123', 'Buyer สมชาย',     'buyer@tgt.co.th',  'buyer',      'PR30'),
+          ('mkt',    'mkt123',   'Marketing สมศรี', 'mkt@tgt.co.th',    'marketing',  'MKT'),
+          ('viewer', 'view123',  'Viewer ทดสอบ',    'viewer@tgt.co.th', 'viewer',     'QA');
+    ''')
     conn.commit()
     conn.close()
-    print('DB ready')
-
-def log(msg, type='ok', user='system'):
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(f'INSERT INTO activity_log(msg,type,"user") VALUES({PH},{PH},{PH})', (msg, type, user))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f'Log error: {e}')
+    print('SQLite DB ready')
 
 # ── EMAIL ─────────────────────────────────────────────────────
 def send_email(to_list, subject, body_html):
@@ -226,11 +128,15 @@ def send_email(to_list, subject, body_html):
         return False
 
 def notify_new_request(r):
-    conn = get_db()
-    c = cur(conn)
-    c.execute(f"SELECT email FROM users WHERE role={PH} AND email IS NOT NULL AND email!={PH}", ('admin', ''))
-    admins = to_list(c.fetchall())
-    conn.close()
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT email FROM users WHERE role='admin' AND email IS NOT NULL AND email!=''")
+        admins = to_list(c.fetchall())
+        conn.close()
+    else:
+        res = sb.table('users').select('email').eq('role', 'admin').neq('email', '').execute()
+        admins = res.data or []
     to = list({row['email'] for row in admins} | {NOTIFY_CC} - {''})
     if not to: return
     html = f"""
@@ -266,16 +172,35 @@ def notify_status_change(r):
     </div>"""
     send_email(to, f'[G-TAP] Request {r["doc_no"]} - {r["status"]}', html)
 
+def log(msg, type='ok', user='system'):
+    try:
+        if USE_SQLITE:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute('INSERT INTO activity_log(msg,type,"user") VALUES(?,?,?)', (msg, type, user))
+            conn.commit()
+            conn.close()
+        else:
+            sb.table('activity_log').insert({'msg': msg, 'type': type, 'user': user}).execute()
+    except Exception as e:
+        print(f'Log error: {e}')
+
 # ── AUTH ──────────────────────────────────────────────────────
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json or {}
     u, p = data.get('username', ''), data.get('password', '')
-    conn = get_db()
-    c = cur(conn)
-    c.execute(f'SELECT * FROM users WHERE (username={PH} OR email={PH}) AND password={PH}', (u, u, p))
-    row = to_dict(c.fetchone())
-    conn.close()
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT * FROM users WHERE (username=? OR email=?) AND password=?', (u, u, p))
+        row = to_dict(c.fetchone())
+        conn.close()
+    else:
+        res = sb.table('users').select('*').eq('username', u).eq('password', p).execute()
+        if not res.data:
+            res = sb.table('users').select('*').eq('email', u).eq('password', p).execute()
+        row = res.data[0] if res.data else None
     if not row:
         return jsonify({'error': 'Invalid credentials'}), 401
     row.pop('password', None)
@@ -285,11 +210,15 @@ def login():
 # ── USERS ─────────────────────────────────────────────────────
 @app.route('/api/users')
 def list_users():
-    conn = get_db()
-    c = cur(conn)
-    c.execute('SELECT id,username,name,email,role,dept,created_at FROM users ORDER BY id')
-    rows = to_list(c.fetchall())
-    conn.close()
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT id,username,name,email,role,dept,created_at FROM users ORDER BY id')
+        rows = to_list(c.fetchall())
+        conn.close()
+    else:
+        res = sb.table('users').select('id,username,name,email,role,dept,created_at').order('id').execute()
+        rows = res.data or []
     return jsonify(rows)
 
 @app.route('/api/users', methods=['POST'])
@@ -298,17 +227,24 @@ def create_user():
     if not d.get('username') or not d.get('password') or not d.get('name'):
         return jsonify({'error': 'Missing required fields'}), 400
     try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            f'INSERT INTO users(username,password,name,email,role,dept) VALUES({PH},{PH},{PH},{PH},{PH},{PH})',
-            (d['username'], d['password'], d['name'], d.get('email', ''), d.get('role', 'viewer'), d.get('dept', ''))
-        )
-        conn.commit()
-        conn.close()
+        if USE_SQLITE:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute(
+                'INSERT INTO users(username,password,name,email,role,dept) VALUES(?,?,?,?,?,?)',
+                (d['username'], d['password'], d['name'], d.get('email',''), d.get('role','viewer'), d.get('dept',''))
+            )
+            conn.commit()
+            conn.close()
+        else:
+            sb.table('users').insert({
+                'username': d['username'], 'password': d['password'],
+                'name': d['name'], 'email': d.get('email',''),
+                'role': d.get('role','viewer'), 'dept': d.get('dept',''),
+            }).execute()
         return jsonify({'message': 'Created'}), 201
     except Exception as e:
-        if 'unique' in str(e).lower() or 'UNIQUE' in str(e):
+        if 'unique' in str(e).lower() or '23505' in str(e):
             return jsonify({'error': 'Username already exists'}), 400
         return jsonify({'error': str(e)}), 500
 
@@ -317,26 +253,30 @@ def update_user(uid):
     d = request.json or {}
     if not d.get('name'):
         return jsonify({'error': 'Missing name'}), 400
-    conn = get_db()
-    c = conn.cursor()
-    fields = f'name={PH}, email={PH}, role={PH}, dept={PH}'
-    params = [d['name'], d.get('email',''), d.get('role','viewer'), d.get('dept','')]
+    payload = {'name': d['name'], 'email': d.get('email',''), 'role': d.get('role','viewer'), 'dept': d.get('dept','')}
     if d.get('password'):
-        fields += f', password={PH}'
-        params.append(d['password'])
-    params.append(uid)
-    c.execute(f'UPDATE users SET {fields} WHERE id={PH}', params)
-    conn.commit()
-    conn.close()
+        payload['password'] = d['password']
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        fields = ', '.join(f'{k}=?' for k in payload)
+        c.execute(f'UPDATE users SET {fields} WHERE id=?', list(payload.values()) + [uid])
+        conn.commit()
+        conn.close()
+    else:
+        sb.table('users').update(payload).eq('id', uid).execute()
     return jsonify({'message': 'Updated'})
 
 @app.route('/api/users/<int:uid>', methods=['DELETE'])
 def delete_user(uid):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(f'DELETE FROM users WHERE id={PH}', (uid,))
-    conn.commit()
-    conn.close()
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('DELETE FROM users WHERE id=?', (uid,))
+        conn.commit()
+        conn.close()
+    else:
+        sb.table('users').delete().eq('id', uid).execute()
     return jsonify({'message': 'Deleted'})
 
 # ── REQUESTS ──────────────────────────────────────────────────
@@ -345,63 +285,103 @@ def list_requests():
     q  = request.args.get('q', '').lower()
     st = request.args.get('status', '')
     fc = request.args.get('factory', '')
-    sql    = 'SELECT * FROM requests WHERE 1=1'
-    params = []
-    if q:
-        sql += f' AND (LOWER(doc_no) LIKE {PH} OR LOWER(user_name) LIKE {PH} OR LOWER(dept) LIKE {PH})'
-        params += [f'%{q}%'] * 3
-    if st:
-        sql += f' AND status={PH}'; params.append(st)
-    if fc:
-        sql += f' AND factory={PH}'; params.append(fc)
-    sql += ' ORDER BY id DESC'
-    conn = get_db()
-    c = cur(conn)
-    c.execute(sql, params)
-    rows = to_list(c.fetchall())
-    result = []
-    for row in rows:
-        c.execute(f'SELECT * FROM products WHERE request_id={PH} ORDER BY seq', (row['id'],))
-        row['products'] = to_list(c.fetchall())
-        result.append(row)
-    conn.close()
+    if USE_SQLITE:
+        sql = 'SELECT * FROM requests WHERE 1=1'
+        params = []
+        if q:
+            sql += ' AND (LOWER(doc_no) LIKE ? OR LOWER(user_name) LIKE ? OR LOWER(dept) LIKE ?)'
+            params += [f'%{q}%'] * 3
+        if st:
+            sql += ' AND status=?'; params.append(st)
+        if fc:
+            sql += ' AND factory=?'; params.append(fc)
+        sql += ' ORDER BY id DESC'
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(sql, params)
+        rows = to_list(c.fetchall())
+        result = []
+        for row in rows:
+            c.execute('SELECT * FROM products WHERE request_id=? ORDER BY seq', (row['id'],))
+            row['products'] = to_list(c.fetchall())
+            result.append(row)
+        conn.close()
+    else:
+        query = sb.table('requests').select('*, products(*)')
+        if q:
+            query = query.or_(f'doc_no.ilike.%{q}%,user_name.ilike.%{q}%,dept.ilike.%{q}%')
+        if st:
+            query = query.eq('status', st)
+        if fc:
+            query = query.eq('factory', fc)
+        res = query.order('id', desc=True).execute()
+        result = res.data or []
     return jsonify(result)
 
 @app.route('/api/requests', methods=['POST'])
 def create_request():
     d = request.json or {}
     y = datetime.now().year
-    conn = get_db()
-    c = cur(conn)
-    c.execute(f"SELECT COUNT(*) as count FROM requests WHERE doc_no LIKE {PH}", (f'PSB-{y}-%',))
-    cnt = to_dict(c.fetchone())['count']
-    doc_no = f'PSB-{y}-{str(cnt + 1).zfill(3)}'
-    req_id = insert_get_id(
-        c,
-        f'''INSERT INTO requests
-            (doc_no,issue_date,request_date,factory,user_name,dept,section,ext,email,
-             purpose,order_type,purpose_desc,product_type,remark,payment,status,created_by)
-            VALUES({PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH})''',
-        (doc_no, d.get('issueDate'), d.get('requestDate'), d.get('factory'),
-         d.get('userName'), d.get('dept'), d.get('section'), d.get('ext'), d.get('email'),
-         d.get('purpose'), d.get('orderType'), d.get('purposeDesc'), d.get('productType'),
-         d.get('remark'), d.get('payment'), d.get('status', 'Pending'), d.get('createdBy', ''))
-    )
-    for i, p in enumerate(d.get('products', [])):
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM requests WHERE doc_no LIKE ?", (f'PSB-{y}-%',))
+        cnt = c.fetchone()[0]
+        doc_no = f'PSB-{y}-{str(cnt + 1).zfill(3)}'
         c.execute(
-            f'''INSERT INTO products
-                (request_id,seq,model,part_no,name,qty,unit,budget,gtap_code,gtap_name,
-                 new_old,sup_code,sup_name,lead_time,currency,price,moq,prod_remark)
-                VALUES({PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH})''',
-            (req_id, i+1, p.get('model'), p.get('partNo'), p.get('name'), p.get('qty'),
-             p.get('unit'), p.get('budget'), p.get('gtapCode'), p.get('gtapName'), p.get('newOld'),
-             p.get('supCode'), p.get('supName'), p.get('leadTime'), p.get('currency'),
-             p.get('price'), p.get('moq'), p.get('remark'))
+            '''INSERT INTO requests
+               (doc_no,issue_date,request_date,factory,user_name,dept,section,ext,email,
+                purpose,order_type,purpose_desc,product_type,remark,payment,status,created_by)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (doc_no, d.get('issueDate'), d.get('requestDate'), d.get('factory'),
+             d.get('userName'), d.get('dept'), d.get('section'), d.get('ext'), d.get('email'),
+             d.get('purpose'), d.get('orderType'), d.get('purposeDesc'), d.get('productType'),
+             d.get('remark'), d.get('payment'), d.get('status','Pending'), d.get('createdBy',''))
         )
-    c.execute(f'SELECT * FROM requests WHERE id={PH}', (req_id,))
-    r = to_dict(c.fetchone())
-    conn.commit()
-    conn.close()
+        req_id = c.lastrowid
+        for i, p in enumerate(d.get('products', [])):
+            c.execute(
+                '''INSERT INTO products
+                   (request_id,seq,model,part_no,name,qty,unit,budget,gtap_code,gtap_name,
+                    new_old,sup_code,sup_name,lead_time,currency,price,moq,prod_remark)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                (req_id, i+1, p.get('model'), p.get('partNo'), p.get('name'), p.get('qty'),
+                 p.get('unit'), p.get('budget'), p.get('gtapCode'), p.get('gtapName'), p.get('newOld'),
+                 p.get('supCode'), p.get('supName'), p.get('leadTime'), p.get('currency'),
+                 p.get('price'), p.get('moq'), p.get('remark'))
+            )
+        c.execute('SELECT * FROM requests WHERE id=?', (req_id,))
+        r = to_dict(c.fetchone())
+        conn.commit()
+        conn.close()
+    else:
+        cnt_res = sb.table('requests').select('id', count='exact').like('doc_no', f'PSB-{y}-%').execute()
+        cnt = cnt_res.count or 0
+        doc_no = f'PSB-{y}-{str(cnt + 1).zfill(3)}'
+        req_res = sb.table('requests').insert({
+            'doc_no': doc_no,
+            'issue_date': d.get('issueDate'), 'request_date': d.get('requestDate'),
+            'factory': d.get('factory'), 'user_name': d.get('userName'),
+            'dept': d.get('dept'), 'section': d.get('section'),
+            'ext': d.get('ext'), 'email': d.get('email'),
+            'purpose': d.get('purpose'), 'order_type': d.get('orderType'),
+            'purpose_desc': d.get('purposeDesc'), 'product_type': d.get('productType'),
+            'remark': d.get('remark'), 'payment': d.get('payment'),
+            'status': d.get('status', 'Pending'), 'created_by': d.get('createdBy', ''),
+        }).execute()
+        req_id = req_res.data[0]['id']
+        r = req_res.data[0]
+        if d.get('products'):
+            sb.table('products').insert([{
+                'request_id': req_id, 'seq': i+1,
+                'model': p.get('model'), 'part_no': p.get('partNo'), 'name': p.get('name'),
+                'qty': p.get('qty'), 'unit': p.get('unit'), 'budget': p.get('budget'),
+                'gtap_code': p.get('gtapCode'), 'gtap_name': p.get('gtapName'),
+                'new_old': p.get('newOld'), 'sup_code': p.get('supCode'),
+                'sup_name': p.get('supName'), 'lead_time': p.get('leadTime'),
+                'currency': p.get('currency'), 'price': p.get('price'),
+                'moq': p.get('moq'), 'prod_remark': p.get('remark'),
+            } for i, p in enumerate(d.get('products', []))]).execute()
     log(f'สร้าง Request {doc_no}', 'ok', d.get('createdBy', ''))
     notify_new_request(r)
     return jsonify({'id': req_id, 'docNo': doc_no, 'message': 'Created'}), 201
@@ -413,51 +393,75 @@ def update_status(rid):
     VALID = {'Pending','Acct_Approved','Buyer_Approved','Rejected','Mkt_Approved','Mkt_Returned','Done'}
     if status not in VALID:
         return jsonify({'error': 'Invalid status'}), 400
-    conn = get_db()
-    c = cur(conn)
-    now_fn = 'CURRENT_TIMESTAMP' if USE_SQLITE else 'NOW()'
-    c.execute(
-        f'UPDATE requests SET status={PH}, updated_by={PH}, updated_at={now_fn} WHERE id={PH}',
-        (status, d.get('updatedBy', ''), rid)
-    )
-    c.execute(f'SELECT * FROM requests WHERE id={PH}', (rid,))
-    r = to_dict(c.fetchone())
-    conn.commit()
-    conn.close()
-    log(f'{d.get("updatedBy","")} → {status} ({r["doc_no"]})', 'ok' if status != 'Rejected' else 'err')
+    updater = d.get('updatedBy', '')
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            'UPDATE requests SET status=?, updated_by=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+            (status, updater, rid)
+        )
+        c.execute('SELECT * FROM requests WHERE id=?', (rid,))
+        r = to_dict(c.fetchone())
+        conn.commit()
+        conn.close()
+    else:
+        sb.table('requests').update({
+            'status': status, 'updated_by': updater,
+            'updated_at': datetime.utcnow().isoformat(),
+        }).eq('id', rid).execute()
+        res = sb.table('requests').select('*').eq('id', rid).execute()
+        r = res.data[0] if res.data else {'doc_no': rid}
+    log(f'{updater} → {status} ({r.get("doc_no",rid)})', 'ok' if status != 'Rejected' else 'err')
     notify_status_change(r)
     return jsonify({'message': 'Updated'})
 
 @app.route('/api/requests/<int:rid>', methods=['DELETE'])
 def delete_request(rid):
-    conn = get_db()
-    c = cur(conn)
-    c.execute(f'SELECT doc_no FROM requests WHERE id={PH}', (rid,))
-    r = to_dict(c.fetchone())
-    c.execute(f'DELETE FROM requests WHERE id={PH}', (rid,))
-    conn.commit()
-    conn.close()
-    log(f'ลบ Request {r["doc_no"] if r else rid}', 'err')
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT doc_no FROM requests WHERE id=?', (rid,))
+        row = to_dict(c.fetchone())
+        c.execute('DELETE FROM requests WHERE id=?', (rid,))
+        conn.commit()
+        conn.close()
+        doc_no = row['doc_no'] if row else rid
+    else:
+        res = sb.table('requests').select('doc_no').eq('id', rid).execute()
+        doc_no = res.data[0]['doc_no'] if res.data else rid
+        sb.table('requests').delete().eq('id', rid).execute()
+    log(f'ลบ Request {doc_no}', 'err')
     return jsonify({'message': 'Deleted'})
 
 @app.route('/api/stats')
 def stats():
-    conn = get_db()
-    c = conn.cursor()
-    c.execute('SELECT COUNT(*) FROM requests'); t = c.fetchone()[0]
-    c.execute(f"SELECT COUNT(*) FROM requests WHERE status={PH}", ('Pending',)); p = c.fetchone()[0]
-    c.execute(f"SELECT COUNT(*) FROM requests WHERE status={PH}", ('Approved',)); a = c.fetchone()[0]
-    c.execute('SELECT COUNT(*) FROM products'); i = c.fetchone()[0]
-    conn.close()
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT COUNT(*) FROM requests'); t = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM requests WHERE status='Pending'"); p = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM requests WHERE status='Approved'"); a = c.fetchone()[0]
+        c.execute('SELECT COUNT(*) FROM products'); i = c.fetchone()[0]
+        conn.close()
+    else:
+        t = (sb.table('requests').select('id', count='exact').execute()).count or 0
+        p = (sb.table('requests').select('id', count='exact').eq('status', 'Pending').execute()).count or 0
+        a = (sb.table('requests').select('id', count='exact').eq('status', 'Approved').execute()).count or 0
+        i = (sb.table('products').select('id', count='exact').execute()).count or 0
     return jsonify({'total': t, 'pending': p, 'approved': a, 'items': i})
 
 @app.route('/api/logs')
 def get_logs():
-    conn = get_db()
-    c = cur(conn)
-    c.execute('SELECT * FROM activity_log ORDER BY id DESC LIMIT 50')
-    rows = to_list(c.fetchall())
-    conn.close()
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT * FROM activity_log ORDER BY id DESC LIMIT 50')
+        rows = to_list(c.fetchall())
+        conn.close()
+    else:
+        res = sb.table('activity_log').select('*').order('id', desc=True).limit(50).execute()
+        rows = res.data or []
     return jsonify(rows)
 
 @app.route('/')
