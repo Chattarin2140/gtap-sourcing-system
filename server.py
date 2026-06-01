@@ -18,13 +18,10 @@ def handle_exception(e):
     return jsonify({'error': str(e), 'trace': traceback.format_exc()[-800:]}), 500
 
 # ── DATABASE BACKEND ──────────────────────────────────────────
-_SB_URL = 'https://ppixmnxrnykaieenyaxh.supabase.co'
-_SB_KEY = (
-    os.environ.get('SUPABASE_SERVICE_KEY') or
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6'
-    'InBwaXhtbnhybnlrYWllZW55YXhoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6'
-    'MTc3ODgyNTg4OCwiZXhwIjoyMDk0NDAxODg4fQ.xWjiTT87CPt4AVb366Oraeuv-13Db7K3d5BVVuE5x_Y'
-)
+# Secrets come from environment variables only. Set these in Vercel:
+#   SUPABASE_SERVICE_KEY, SMTP_USER, SMTP_PASS, SENDER, NOTIFY_CC
+_SB_URL = os.environ.get('SUPABASE_URL', 'https://ppixmnxrnykaieenyaxh.supabase.co')
+_SB_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
 
 USE_SQLITE = not bool(os.environ.get('VERCEL'))
 
@@ -34,6 +31,8 @@ if USE_SQLITE:
     PH = '?'
     print('Local dev: using SQLite ->', SQLITE_PATH)
 else:
+    if not _SB_KEY:
+        raise RuntimeError('SUPABASE_SERVICE_KEY env var is required in production')
     from supabase import create_client
     sb = create_client(_SB_URL, _SB_KEY)
     print('Production: using Supabase REST API')
@@ -41,10 +40,10 @@ else:
 # ── EMAIL CONFIG ──────────────────────────────────────────────
 SMTP_HOST  = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
 SMTP_PORT  = int(os.environ.get('SMTP_PORT', '587'))
-SMTP_USER  = os.environ.get('SMTP_USER', 'rinti256@gmail.com')
-SMTP_PASS  = os.environ.get('SMTP_PASS', 'umqv uhyx dtyw pdnz')
-SENDER     = os.environ.get('SENDER',    'rinti256@gmail.com')
-NOTIFY_CC  = os.environ.get('NOTIFY_CC', 'rinti256@gmail.com')
+SMTP_USER  = os.environ.get('SMTP_USER', '')
+SMTP_PASS  = os.environ.get('SMTP_PASS', '')
+SENDER     = os.environ.get('SENDER') or SMTP_USER
+NOTIFY_CC  = os.environ.get('NOTIFY_CC', '')
 
 # ── SQLite helpers (local dev only) ──────────────────────────
 def get_db():
@@ -112,6 +111,9 @@ def init_db():
 
 # ── EMAIL ─────────────────────────────────────────────────────
 def send_email(to_list, subject, body_html):
+    if not (SMTP_USER and SMTP_PASS):
+        print('Email skipped: SMTP_USER/SMTP_PASS not configured')
+        return False
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
