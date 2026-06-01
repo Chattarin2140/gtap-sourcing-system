@@ -32,7 +32,7 @@ if USE_SQLITE:
     import sqlite3
     SQLITE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gtap_local.db')
     PH = '?'
-    print('Local dev: using SQLite →', SQLITE_PATH)
+    print('Local dev: using SQLite ->', SQLITE_PATH)
 else:
     from supabase import create_client
     sb = create_client(_SB_URL, _SB_KEY)
