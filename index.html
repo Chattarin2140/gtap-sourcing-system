@@ -1251,22 +1251,28 @@ function buildWB(reqs) {
   });
   return wb;
 }
+async function downloadXlsx(url, filename) {
+  try {
+    const res = await fetch(url, {headers: {'Authorization': `Bearer ${getToken()}`}});
+    if (!res.ok) { toast('Export ไม่สำเร็จ: '+res.status, 'err'); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch(e) { toast('Export ผิดพลาด: '+e.message, 'err'); }
+}
 function exportOne(id){
   const r=DB.find(x=>x.id===id);
   if(!r)return;
-  const a=document.createElement('a');
-  a.href=`/api/export-excel/${id}`;
-  a.download=`GTAP_${r.docNo}.xlsx`;
-  a.click();
+  downloadXlsx(`/api/export-excel/${id}`, `GTAP_${r.docNo}.xlsx`);
   toast(`Export ${r.docNo} สำเร็จ`);
 }
 function exportAll(){
   if(!DB.length){toast('ไม่มีข้อมูล','err');return;}
-  const a=document.createElement('a');
-  a.href='/api/export-excel-all';
-  a.download=`GTAP_All_${new Date().toISOString().split('T')[0]}.xlsx`;
-  a.click();
-  toast(`Export ${DB.length} Request สำเร็จ`);
+  downloadXlsx('/api/export-excel-all', `GTAP_All_${new Date().toISOString().split('T')[0]}.xlsx`);
+  toast(`Export สำเร็จ`);
 }
 
 // ── PDF EXPORT ────────────────────────────────────────────────
