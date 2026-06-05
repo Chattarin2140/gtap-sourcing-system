@@ -547,6 +547,182 @@ def import_excel():
 
     return jsonify({'header': header, 'products': products})
 
+# ── EXCEL EXPORT (template-based) ────────────────────────────
+TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Copy of G-TAP Format-REV01.xlsx')
+
+def _fetch_request_and_products(rid):
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT * FROM requests WHERE id=?', (rid,))
+        r = to_dict(c.fetchone())
+        if not r:
+            conn.close()
+            return None, []
+        c.execute('SELECT * FROM products WHERE request_id=? ORDER BY seq', (rid,))
+        prods = to_list(c.fetchall())
+        conn.close()
+    else:
+        res = sb.table('requests').select('*').eq('id', rid).execute()
+        if not res.data:
+            return None, []
+        r = res.data[0]
+        res2 = sb.table('products').select('*').eq('request_id', rid).order('seq').execute()
+        prods = res2.data or []
+    return r, prods
+
+def _build_gtap_wb(requests_products):
+    """Build workbook from template for one or more (request, products) pairs."""
+    import openpyxl, io
+    from openpyxl.styles import Font, Alignment
+
+    # Read template bytes so we can load within same workbook (copy_worksheet requires same wb)
+    with open(TEMPLATE_PATH, 'rb') as _f:
+        _tpl_bytes = _f.read()
+
+    # Load template as the working workbook; copy_worksheet works within same wb
+    wb = openpyxl.load_workbook(io.BytesIO(_tpl_bytes))
+    # Keep only the two template sheets as originals; remove extras
+    for name in list(wb.sheetnames):
+        if name not in [wb.worksheets[0].title, 'detail D92A KRT']:
+            del wb[name]
+    tpl_psb_title = wb.worksheets[0].title
+
+    # For each request, copy the template sheets, fill values, then remove originals at the end
+    for req, prods in requests_products:
+        sheet_name = (req.get('doc_no') or f'REQ-{req["id"]}').replace('/', '-')[:28]
+        det_name   = f'{sheet_name[:24]}-Det'
+
+        # Copy template sheets (within same workbook — this is allowed)
+        ws  = wb.copy_worksheet(wb[tpl_psb_title])
+        ws.title = sheet_name
+        det = wb.copy_worksheet(wb['detail D92A KRT'])
+        det.title = det_name
+        sheet_name = (req.get('doc_no') or f'REQ-{req["id"]}').replace('/', '-')[:31]
+        ws.title = sheet_name
+
+        # ── Fill header fields ───────────────────────────────────
+        ws['C4']  = req.get('issue_date', '')
+        ws['C5']  = req.get('request_date', '')
+        ws['C6']  = req.get('factory', '')
+        ws['C7']  = req.get('user_name', '')
+        ws['C8']  = req.get('dept', '')
+        ws['C9']  = req.get('section', '')
+        ws['C10'] = req.get('ext', '')
+        ws['C11'] = req.get('email', '')
+
+        # Product type goes next to the "* Product Type." label at F3
+        ws['H3']  = req.get('product_type', '')
+
+        # Reason of Order / Purpose section (right of N3)
+        purpose = req.get('purpose', '')
+        ws['O4'] = f'  ☑ {purpose}' if purpose else ''
+        ws['O8'] = req.get('purpose_desc', '')
+
+        # Doc No (cell V4, merged V4:X5)
+        ws['V4']  = req.get('doc_no', '')
+        # Order Type value (cell V6, merged V6:X7) — override the "Order Type" label
+        ws['V6']  = req.get('order_type', '')
+        ws['V6'].font      = Font(bold=False, size=18, name='Calibri')
+        ws['V6'].alignment = Alignment(horizontal='center', vertical='center')
+
+        # Status in far right
+        ws['Y6']  = req.get('status', '')
+
+        # ── Fill detail sheet (det already copied above) ──────────
+        # Calculate remark row dynamically (2 rows per product, starting at row 7)
+        REMARK_ROW = max(21, 7 + len(prods) * 2 + 1)
+        # Clear sample product rows (7 onward) up to remark row
+        for row_num in range(7, REMARK_ROW):
+            for col_num in range(1, 27):
+                det.cell(row=row_num, column=col_num).value = None
+
+        # Fill products (2 rows per product: row1=main, row2=sub)
+        for i, p in enumerate(prods):
+            r1 = 7 + i * 2
+            r2 = r1 + 1
+            det.cell(r1, 1).value  = i + 1
+            det.cell(r1, 2).value  = p.get('model', '')
+            det.cell(r1, 3).value  = p.get('part_no', '')
+            det.cell(r2, 3).value  = p.get('name', '')
+            det.cell(r1, 4).value  = p.get('qty', '')
+            det.cell(r1, 5).value  = p.get('unit', '')
+            det.cell(r1, 6).value  = '-'
+            det.cell(r1, 7).value  = '-'
+            det.cell(r1, 8).value  = '-'
+            det.cell(r1, 9).value  = p.get('budget', '')
+            det.cell(r1, 10).value = p.get('gtap_code', '')
+            det.cell(r2, 10).value = p.get('gtap_name', '')
+            new_old = p.get('new_old', 'P')
+            det.cell(r1, 11).value = 'P' if new_old in ('P', 'New', 'new') else ''
+            det.cell(r1, 12).value = 'O' if new_old in ('O', 'Old', 'old') else ''
+            det.cell(r1, 13).value = p.get('sup_code', '')
+            det.cell(r2, 13).value = p.get('sup_name', '')
+            det.cell(r1, 14).value = p.get('lead_time', '')
+            det.cell(r1, 15).value = p.get('currency', '')
+            det.cell(r2, 15).value = p.get('price', '')
+            det.cell(r1, 16).value = 1
+            det.cell(r1, 17).value = p.get('unit', '')
+            det.cell(r1, 19).value = p.get('moq', '')
+            det.cell(r1, 26).value = p.get('prod_remark', '')
+
+        det.cell(REMARK_ROW, 1).value  = req.get('remark', '')
+        det.cell(REMARK_ROW, 20).value = req.get('payment', '')
+
+    # Remove original template sheets now that all requests are processed
+    for name in [tpl_psb_title, 'detail D92A KRT']:
+        if name in wb.sheetnames:
+            del wb[name]
+
+    return wb
+
+@app.route('/api/export-excel/<int:rid>')
+def export_excel(rid):
+    from flask import Response
+    import io
+    r, prods = _fetch_request_and_products(rid)
+    if r is None:
+        return jsonify({'error': 'Not found'}), 404
+    wb = _build_gtap_wb([(r, prods)])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f'GTAP_{r.get("doc_no", rid)}.xlsx'
+    return Response(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
+@app.route('/api/export-excel-all')
+def export_excel_all():
+    from flask import Response
+    import io
+    if USE_SQLITE:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT * FROM requests ORDER BY id DESC')
+        reqs = to_list(c.fetchall())
+        pairs = []
+        for req in reqs:
+            c.execute('SELECT * FROM products WHERE request_id=? ORDER BY seq', (req['id'],))
+            pairs.append((req, to_list(c.fetchall())))
+        conn.close()
+    else:
+        res = sb.table('requests').select('*').order('id', desc=True).execute()
+        reqs = res.data or []
+        pairs = []
+        for req in reqs:
+            res2 = sb.table('products').select('*').eq('request_id', req['id']).order('seq').execute()
+            pairs.append((req, res2.data or []))
+    if not pairs:
+        return jsonify({'error': 'No data'}), 404
+    wb = _build_gtap_wb(pairs)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    from datetime import date
+    fname = f'GTAP_All_{date.today()}.xlsx'
+    return Response(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
