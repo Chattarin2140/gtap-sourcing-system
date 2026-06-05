@@ -718,6 +718,20 @@ def _build_gtap_wb(requests_products):
         ws['V6'].alignment = Alignment(horizontal='center', vertical='center')
         ws['Y6']  = req.get('status', '')
 
+        ot = req.get('order_type', '') or ''
+        _ck = Font(bold=True, size=14, name='Calibri')
+        _ca = Alignment(horizontal='center', vertical='center')
+        for cell_addr, keyword in [('Z41', 'TGT/TGRT/PDO'), ('Z42', 'BOI'),
+                                   ('AA41', 'ODC'), ('AB41', 'TGAS/PPA')]:
+            if keyword.lower() in ot.lower():
+                c = ws[cell_addr]
+                c.value = '√'
+                c.font  = _ck
+                c.alignment = _ca
+
+        for col_letter in ('Z', 'AA', 'AB'):
+            ws.column_dimensions[col_letter].width = 15
+
         REMARK_ROW = max(21, 7 + len(prods) * 2 + 1)
         for row_num in range(7, REMARK_ROW):
             for col_num in range(1, 27):
