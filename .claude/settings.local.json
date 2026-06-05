@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "PowerShell(New-Item *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(python3 *)",
+      "Bash(curl -s http://localhost:5000/api/requests)",
+      "Bash(gh api *)",
+      "Bash(xargs -I{} gh api repos/Chattarin2140/gtap-sourcing-system/deployments/{}/statuses --jq '.[0] | {state, url: .target_url, desc: .description}')"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
