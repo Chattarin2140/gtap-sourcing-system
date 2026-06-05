@@ -457,8 +457,8 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
         <div class="page" id="page-hist">
           <div class="abar" style="margin-bottom:14px">
             <div style="display:flex;gap:8px;flex-wrap:wrap;flex:1">
-              <div class="search-wrap"><i class="ti ti-search"></i><input type="text" id="sq" placeholder="ค้นหา Doc.No., ชื่อ, แผนก..." oninput="renderHist()"></div>
-              <select id="fs" onchange="renderHist()" style="width:150px">
+              <div class="search-wrap"><i class="ti ti-search"></i><input type="text" id="sq" placeholder="ค้นหา Doc.No., ชื่อ, แผนก..." oninput="onHistSearch()"></div>
+              <select id="fs" onchange="onHistSearch()" style="width:150px">
                 <option value="">All Status</option>
                 <option value="Pending">รอบัญชีตรวจ</option>
                 <option value="Acct_Approved">รอ Buyer</option>
@@ -468,7 +468,7 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
                 <option value="Rejected">Rejected</option>
                 <option value="Done">Done ✅</option>
               </select>
-              <select id="ff" onchange="renderHist()" style="width:110px"><option value="">All Factory</option><option>TGT1</option><option>TGT2</option><option>TGT3</option><option>TGRT</option><option>PDO</option></select>
+              <select id="ff" onchange="onHistSearch()" style="width:110px"><option value="">All Factory</option><option>TGT1</option><option>TGT2</option><option>TGT3</option><option>TGRT</option><option>PDO</option></select>
             </div>
             <div class="abar-r">
               <button class="btn btn-success btn-sm" onclick="exportAll()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
@@ -476,6 +476,11 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
             </div>
           </div>
           <div id="hist-list"></div>
+          <div id="hist-pagination" style="display:none;align-items:center;gap:10px;padding:12px 4px;justify-content:center">
+            <button id="pg-prev" class="btn btn-sm" onclick="goPage(-1)"><i class="ti ti-chevron-left"></i> ก่อนหน้า</button>
+            <span id="pg-info" style="font-size:13px;color:var(--muted)"></span>
+            <button id="pg-next" class="btn btn-sm" onclick="goPage(1)">ถัดไป <i class="ti ti-chevron-right"></i></button>
+          </div>
         </div>
 
         <!-- USERS -->
@@ -568,11 +573,16 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
 
 <script>
 // ── API LAYER ─────────────────────────────────────────────────
+function getToken() { return localStorage.getItem('gtap_token') || ''; }
+
 async function api(method, path, body) {
   try {
     const opts = { method, headers: {'Content-Type':'application/json'} };
+    const token = getToken();
+    if (token) opts.headers['Authorization'] = `Bearer ${token}`;
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(path, opts);
+    if (res.status === 401 && token) { doLogout(); return {error: 'Session expired'}; }
     return await res.json();
   } catch(e) { return {error: e.message}; }
 }
@@ -632,18 +642,77 @@ function getAvailableActions(r) {
 }
 let DB = [];
 let LOGS = [];
+let STATS = null;
+let TOTAL_REQUESTS = 0;
+let CURRENT_PAGE   = 1;
+let SEARCH_Q = '', SEARCH_ST = '', SEARCH_FC = '';
+const PER_PAGE = 50;
 let CU = JSON.parse(localStorage.getItem('gtap_cu') || 'null');
 
 async function loadData() {
-  const [reqs, users, logs] = await Promise.all([
-    api('GET', '/api/requests'),
+  const params = new URLSearchParams({page: 1, per_page: PER_PAGE});
+  const [reqs, users, logs, stats] = await Promise.all([
+    api('GET', `/api/requests?${params}`),
     api('GET', '/api/users'),
     api('GET', '/api/logs'),
+    api('GET', '/api/stats'),
   ]);
-  DB    = Array.isArray(reqs)  ? reqs.map(toCamel)  : [];
-  USERS = Array.isArray(users) ? users               : [];
-  LOGS  = Array.isArray(logs)  ? logs                : [];
+  const data    = reqs?.data ?? (Array.isArray(reqs) ? reqs : []);
+  DB            = data.map(toCamel);
+  TOTAL_REQUESTS = reqs?.total ?? DB.length;
+  CURRENT_PAGE   = 1;
+  USERS = Array.isArray(users) ? users : [];
+  LOGS  = Array.isArray(logs)  ? logs  : [];
+  STATS = (!stats || stats.error) ? null : stats;
   updateBadge();
+}
+
+async function fetchRequests(page=1, q='', st='', fc='') {
+  const params = new URLSearchParams({page, per_page: PER_PAGE});
+  if (q)  params.set('q', q);
+  if (st) params.set('status', st);
+  if (fc) params.set('factory', fc);
+  const res = await api('GET', `/api/requests?${params}`);
+  if (!res || res.error) return;
+  DB            = (res.data || []).map(toCamel);
+  TOTAL_REQUESTS = res.total ?? DB.length;
+  CURRENT_PAGE   = res.page  ?? page;
+  updateBadge();
+  renderHist();
+  renderPagination();
+}
+
+let _searchTimer = null;
+function onHistSearch() {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => {
+    SEARCH_Q  = (document.getElementById('sq')?.value  || '').toLowerCase();
+    SEARCH_ST = document.getElementById('fs')?.value   || '';
+    SEARCH_FC = document.getElementById('ff')?.value   || '';
+    fetchRequests(1, SEARCH_Q, SEARCH_ST, SEARCH_FC);
+  }, 350);
+}
+
+function renderPagination() {
+  const el   = document.getElementById('hist-pagination');
+  if (!el) return;
+  const pages = Math.ceil(TOTAL_REQUESTS / PER_PAGE);
+  const prev  = document.getElementById('pg-prev');
+  const next  = document.getElementById('pg-next');
+  const info  = document.getElementById('pg-info');
+  if (prev) prev.disabled = CURRENT_PAGE <= 1;
+  if (next) next.disabled = CURRENT_PAGE >= pages;
+  if (info) info.textContent = pages > 1
+    ? `หน้า ${CURRENT_PAGE} / ${pages}  (${TOTAL_REQUESTS} รายการ)`
+    : `${TOTAL_REQUESTS} รายการ`;
+  el.style.display = pages > 1 ? 'flex' : 'none';
+}
+
+async function goPage(delta) {
+  const pages = Math.ceil(TOTAL_REQUESTS / PER_PAGE);
+  const np    = CURRENT_PAGE + delta;
+  if (np < 1 || np > pages) return;
+  await fetchRequests(np, SEARCH_Q, SEARCH_ST, SEARCH_FC);
 }
 
 function addLog() {} // server logs automatically
@@ -668,8 +737,10 @@ async function doLogin() {
   txtEl.textContent = 'เข้าสู่ระบบ';
 
   if (res.error) { errEl.style.display = 'flex'; return; }
-  CU = res;
+  const { token, ...userData } = res;
+  CU = userData;
   localStorage.setItem('gtap_cu', JSON.stringify(CU));
+  if (token) localStorage.setItem('gtap_token', token);
   await loadData();
   applySession(CU);
 }
@@ -691,8 +762,9 @@ function applySession(found) {
 }
 
 function doLogout() {
-  CU = null; DB = []; USERS = []; LOGS = [];
+  CU = null; DB = []; USERS = []; LOGS = []; STATS = null;
   localStorage.removeItem('gtap_cu');
+  localStorage.removeItem('gtap_token');
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('li-user').value = '';
@@ -888,10 +960,10 @@ async function updateStatus(id, newStatus) {
 // ── DASHBOARD ─────────────────────────────────────────────────
 function renderDash() {
   const inProgress = ['Pending','Acct_Approved','Buyer_Approved','Mkt_Approved','Mkt_Returned'];
-  document.getElementById('s0').textContent=DB.length;
-  document.getElementById('s1').textContent=DB.filter(r=>inProgress.includes(r.status)).length;
-  document.getElementById('s2').textContent=DB.filter(r=>r.status==='Done').length;
-  document.getElementById('s3').textContent=DB.reduce((s,r)=>s+(r.products?.length||0),0);
+  document.getElementById('s0').textContent = STATS?.total       ?? TOTAL_REQUESTS;
+  document.getElementById('s1').textContent = STATS?.in_progress ?? DB.filter(r=>inProgress.includes(r.status)).length;
+  document.getElementById('s2').textContent = STATS?.done        ?? DB.filter(r=>r.status==='Done').length;
+  document.getElementById('s3').textContent = STATS?.items       ?? DB.reduce((s,r)=>s+(r.products?.length||0),0);
   const el=document.getElementById('dash-recent');
   if(!DB.length){el.innerHTML=`<div class="empty"><i class="ti ti-inbox"></i><p>ยังไม่มี Request</p></div>`;} else {el.innerHTML=DB.slice(0,5).map(r=>rcHtml(r,false)).join('');}
   renderActivityLog();
@@ -966,16 +1038,10 @@ function mkChart(id, type, labels, data, colors) {
 
 // ── HISTORY ───────────────────────────────────────────────────
 function renderHist() {
-  const q=(document.getElementById('sq')?.value||'').toLowerCase();
-  const st=document.getElementById('fs')?.value||'';
-  const fc=document.getElementById('ff')?.value||'';
-  let list=DB.filter(r=>{
-    const txt=[r.docNo,r.userName,r.dept,r.factory,r.purposeDesc].join(' ').toLowerCase();
-    return (!q||txt.includes(q))&&(!st||r.status===st)&&(!fc||r.factory===fc);
-  });
-  const el=document.getElementById('hist-list');
-  if(!list.length){el.innerHTML=`<div class="empty"><i class="ti ti-search-off"></i><p>ไม่พบ Request</p></div>`;return;}
-  el.innerHTML=list.map(r=>rcHtml(r,true)).join('');
+  const el = document.getElementById('hist-list');
+  if (!DB.length) { el.innerHTML=`<div class="empty"><i class="ti ti-search-off"></i><p>ไม่พบ Request</p></div>`; return; }
+  el.innerHTML = DB.map(r=>rcHtml(r,true)).join('');
+  renderPagination();
 }
 
 function sBadge(s){return `<span class="badge ${STATUS_CLS[s]||'b-pending'}">${STATUS_LABEL[s]||s}</span>`;}

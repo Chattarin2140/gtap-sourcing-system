@@ -4,10 +4,12 @@ Flask + Supabase REST API (production) / SQLite (local dev) + Email Notification
 """
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-import os, smtplib
+from functools import wraps
+import os, smtplib, hmac as _hmac, hashlib, base64, json, time
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import bcrypt as _bcrypt
 
 app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
 CORS(app)
@@ -15,11 +17,61 @@ CORS(app)
 @app.errorhandler(Exception)
 def handle_exception(e):
     import traceback
-    return jsonify({'error': str(e), 'trace': traceback.format_exc()[-800:]}), 500
+    if app.debug:
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()[-800:]}), 500
+    return jsonify({'error': 'Internal server error'}), 500
+
+# ── SECURITY ──────────────────────────────────────────────────
+SECRET_KEY = os.environ.get('SECRET_KEY', 'gtap-dev-secret-change-in-prod')
+TOKEN_TTL  = 7 * 86400  # 7 days
+
+def hash_pw(raw: str) -> str:
+    return _bcrypt.hashpw(raw.encode(), _bcrypt.gensalt(10)).decode()
+
+def check_pw(raw: str, stored: str) -> bool:
+    if stored.startswith('$2'):
+        return _bcrypt.checkpw(raw.encode(), stored.encode())
+    return raw == stored  # legacy plain-text — migrated on next successful login
+
+def _make_token(uid: int, role: str, name: str) -> str:
+    payload = json.dumps({'uid': uid, 'role': role, 'name': name, 'iat': int(time.time())})
+    b64     = base64.urlsafe_b64encode(payload.encode()).decode().rstrip('=')
+    sig     = _hmac.new(SECRET_KEY.encode(), b64.encode(), hashlib.sha256).hexdigest()
+    return f'{b64}.{sig}'
+
+def _decode_token(token: str):
+    try:
+        b64, sig = token.rsplit('.', 1)
+        expected = _hmac.new(SECRET_KEY.encode(), b64.encode(), hashlib.sha256).hexdigest()
+        if not _hmac.compare_digest(sig, expected):
+            return None
+        padded = b64 + '=' * (-len(b64) % 4)
+        data   = json.loads(base64.urlsafe_b64decode(padded))
+        if time.time() - data.get('iat', 0) > TOKEN_TTL:
+            return None
+        return data
+    except Exception:
+        return None
+
+def require_auth(roles=None):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            raw   = request.headers.get('Authorization', '')
+            token = raw[7:] if raw.startswith('Bearer ') else raw
+            user  = _decode_token(token.strip())
+            if not user:
+                return jsonify({'error': 'Unauthorized'}), 401
+            if roles and user.get('role') not in roles:
+                return jsonify({'error': 'Forbidden'}), 403
+            request.cu = user
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
 
 # ── DATABASE BACKEND ──────────────────────────────────────────
 # Secrets come from environment variables only. Set these in Vercel:
-#   SUPABASE_SERVICE_KEY, SMTP_USER, SMTP_PASS, SENDER, NOTIFY_CC
+#   SUPABASE_SERVICE_KEY, SECRET_KEY, SMTP_USER, SMTP_PASS, SENDER, NOTIFY_CC
 _SB_URL = os.environ.get('SUPABASE_URL', 'https://ppixmnxrnykaieenyaxh.supabase.co')
 _SB_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
 
@@ -98,6 +150,10 @@ def init_db():
             "user"     TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS sequences (
+            key  TEXT PRIMARY KEY,
+            val  INTEGER NOT NULL DEFAULT 0
+        );
         INSERT OR IGNORE INTO users (username,password,name,email,role,dept) VALUES
           ('admin',  'admin123', 'Admin User',       'admin@tgt.co.th',  'admin',      'IT'),
           ('acct',   'acct123',  'บัญชี สมหญิง',    'acct@tgt.co.th',   'accounting', 'ACC'),
@@ -105,6 +161,18 @@ def init_db():
           ('mkt',    'mkt123',   'Marketing สมศรี', 'mkt@tgt.co.th',    'marketing',  'MKT'),
           ('viewer', 'view123',  'Viewer ทดสอบ',    'viewer@tgt.co.th', 'viewer',     'QA');
     ''')
+    # Migrate plain-text passwords → bcrypt (runs on every startup, safe due to '$2' check)
+    c.execute("SELECT id, password FROM users WHERE password NOT LIKE '$2%'")
+    for row in c.fetchall():
+        c.execute('UPDATE users SET password=? WHERE id=?', (hash_pw(row['password']), row['id']))
+    # Sync sequences table from existing doc_nos to prevent duplicates on restart
+    c.execute("""
+        INSERT OR REPLACE INTO sequences(key, val)
+        SELECT SUBSTR(doc_no, 1, 8), MAX(CAST(SUBSTR(doc_no, 10) AS INTEGER))
+        FROM requests
+        WHERE doc_no LIKE 'PSB-____-_%'
+        GROUP BY SUBSTR(doc_no, 1, 8)
+    """)
     conn.commit()
     conn.close()
     print('SQLite DB ready')
@@ -195,22 +263,33 @@ def login():
     if USE_SQLITE:
         conn = get_db()
         c = conn.cursor()
-        c.execute('SELECT * FROM users WHERE (username=? OR email=?) AND password=?', (u, u, p))
+        c.execute('SELECT * FROM users WHERE (username=? OR email=?)', (u, u))
         row = to_dict(c.fetchone())
+        if row and check_pw(p, row['password']):
+            # On-the-fly migration: re-hash if stored as plain-text
+            if not row['password'].startswith('$2'):
+                c.execute('UPDATE users SET password=? WHERE id=?', (hash_pw(p), row['id']))
+                conn.commit()
+        else:
+            conn.close()
+            return jsonify({'error': 'Invalid credentials'}), 401
         conn.close()
     else:
-        res = sb.table('users').select('*').eq('username', u).eq('password', p).execute()
-        if not res.data:
-            res = sb.table('users').select('*').eq('email', u).eq('password', p).execute()
-        row = res.data[0] if res.data else None
-    if not row:
-        return jsonify({'error': 'Invalid credentials'}), 401
+        res = sb.table('users').select('*').or_(f'username.eq.{u},email.eq.{u}').execute()
+        row = next((r for r in (res.data or []) if check_pw(p, r['password'])), None)
+        if not row:
+            return jsonify({'error': 'Invalid credentials'}), 401
+        # On-the-fly migration for Supabase
+        if not row['password'].startswith('$2'):
+            sb.table('users').update({'password': hash_pw(p)}).eq('id', row['id']).execute()
     row.pop('password', None)
+    token = _make_token(row['id'], row['role'], row['name'])
     log(f'{row["name"]} เข้าสู่ระบบ', 'ok', row['name'])
-    return jsonify(row)
+    return jsonify({**row, 'token': token})
 
 # ── USERS ─────────────────────────────────────────────────────
 @app.route('/api/users')
+@require_auth()
 def list_users():
     if USE_SQLITE:
         conn = get_db()
@@ -224,23 +303,25 @@ def list_users():
     return jsonify(rows)
 
 @app.route('/api/users', methods=['POST'])
+@require_auth(['admin'])
 def create_user():
     d = request.json or {}
     if not d.get('username') or not d.get('password') or not d.get('name'):
         return jsonify({'error': 'Missing required fields'}), 400
     try:
+        hashed = hash_pw(d['password'])
         if USE_SQLITE:
             conn = get_db()
             c = conn.cursor()
             c.execute(
                 'INSERT INTO users(username,password,name,email,role,dept) VALUES(?,?,?,?,?,?)',
-                (d['username'], d['password'], d['name'], d.get('email',''), d.get('role','viewer'), d.get('dept',''))
+                (d['username'], hashed, d['name'], d.get('email',''), d.get('role','viewer'), d.get('dept',''))
             )
             conn.commit()
             conn.close()
         else:
             sb.table('users').insert({
-                'username': d['username'], 'password': d['password'],
+                'username': d['username'], 'password': hashed,
                 'name': d['name'], 'email': d.get('email',''),
                 'role': d.get('role','viewer'), 'dept': d.get('dept',''),
             }).execute()
@@ -251,13 +332,14 @@ def create_user():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/users/<int:uid>', methods=['PUT'])
+@require_auth(['admin'])
 def update_user(uid):
     d = request.json or {}
     if not d.get('name'):
         return jsonify({'error': 'Missing name'}), 400
     payload = {'name': d['name'], 'email': d.get('email',''), 'role': d.get('role','viewer'), 'dept': d.get('dept','')}
     if d.get('password'):
-        payload['password'] = d['password']
+        payload['password'] = hash_pw(d['password'])
     if USE_SQLITE:
         conn = get_db()
         c = conn.cursor()
@@ -270,6 +352,7 @@ def update_user(uid):
     return jsonify({'message': 'Updated'})
 
 @app.route('/api/users/<int:uid>', methods=['DELETE'])
+@require_auth(['admin'])
 def delete_user(uid):
     if USE_SQLITE:
         conn = get_db()
@@ -283,24 +366,34 @@ def delete_user(uid):
 
 # ── REQUESTS ──────────────────────────────────────────────────
 @app.route('/api/requests')
+@require_auth()
 def list_requests():
     q  = request.args.get('q', '').lower()
     st = request.args.get('status', '')
     fc = request.args.get('factory', '')
+    try:
+        page     = max(1, int(request.args.get('page', 1)))
+        per_page = min(100, max(1, int(request.args.get('per_page', 50))))
+    except (ValueError, TypeError):
+        page, per_page = 1, 50
+    offset = (page - 1) * per_page
+
     if USE_SQLITE:
-        sql = 'SELECT * FROM requests WHERE 1=1'
-        params = []
+        filter_sql, params = '', []
         if q:
-            sql += ' AND (LOWER(doc_no) LIKE ? OR LOWER(user_name) LIKE ? OR LOWER(dept) LIKE ?)'
+            filter_sql += ' AND (LOWER(doc_no) LIKE ? OR LOWER(user_name) LIKE ? OR LOWER(dept) LIKE ?)'
             params += [f'%{q}%'] * 3
         if st:
-            sql += ' AND status=?'; params.append(st)
+            filter_sql += ' AND status=?'; params.append(st)
         if fc:
-            sql += ' AND factory=?'; params.append(fc)
-        sql += ' ORDER BY id DESC'
+            filter_sql += ' AND factory=?'; params.append(fc)
+
         conn = get_db()
         c = conn.cursor()
-        c.execute(sql, params)
+        c.execute('SELECT COUNT(*) FROM requests WHERE 1=1' + filter_sql, params)
+        total = c.fetchone()[0]
+        c.execute('SELECT * FROM requests WHERE 1=1' + filter_sql + ' ORDER BY id DESC LIMIT ? OFFSET ?',
+                  params + [per_page, offset])
         rows = to_list(c.fetchall())
         result = []
         for row in rows:
@@ -309,27 +402,35 @@ def list_requests():
             result.append(row)
         conn.close()
     else:
-        query = sb.table('requests').select('*, products(*)')
+        count_q = sb.table('requests').select('id', count='exact')
+        query   = sb.table('requests').select('*, products(*)')
         if q:
-            query = query.or_(f'doc_no.ilike.%{q}%,user_name.ilike.%{q}%,dept.ilike.%{q}%')
+            f = f'doc_no.ilike.%{q}%,user_name.ilike.%{q}%,dept.ilike.%{q}%'
+            count_q = count_q.or_(f); query = query.or_(f)
         if st:
-            query = query.eq('status', st)
+            count_q = count_q.eq('status', st); query = query.eq('status', st)
         if fc:
-            query = query.eq('factory', fc)
-        res = query.order('id', desc=True).execute()
-        result = res.data or []
-    return jsonify(result)
+            count_q = count_q.eq('factory', fc); query = query.eq('factory', fc)
+        total  = (count_q.execute()).count or 0
+        result = query.order('id', desc=True).range(offset, offset + per_page - 1).execute().data or []
+
+    return jsonify({'data': result, 'total': total, 'page': page, 'per_page': per_page})
 
 @app.route('/api/requests', methods=['POST'])
+@require_auth()
 def create_request():
     d = request.json or {}
     y = datetime.now().year
     if USE_SQLITE:
         conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM requests WHERE doc_no LIKE ?", (f'PSB-{y}-%',))
-        cnt = c.fetchone()[0]
-        doc_no = f'PSB-{y}-{str(cnt + 1).zfill(3)}'
+        # Atomic sequence increment — safe from race condition
+        year_key = f'PSB-{y}'
+        c.execute('INSERT OR IGNORE INTO sequences(key, val) VALUES(?, 0)', (year_key,))
+        c.execute('UPDATE sequences SET val = val + 1 WHERE key = ?', (year_key,))
+        c.execute('SELECT val FROM sequences WHERE key = ?', (year_key,))
+        cnt    = c.fetchone()[0]
+        doc_no = f'PSB-{y}-{str(cnt).zfill(3)}'
         c.execute(
             '''INSERT INTO requests
                (doc_no,issue_date,request_date,factory,user_name,dept,section,ext,email,
@@ -357,9 +458,16 @@ def create_request():
         conn.commit()
         conn.close()
     else:
-        cnt_res = sb.table('requests').select('id', count='exact').like('doc_no', f'PSB-{y}-%').execute()
-        cnt = cnt_res.count or 0
-        doc_no = f'PSB-{y}-{str(cnt + 1).zfill(3)}'
+        # Supabase: use gtap_next_seq RPC for atomic increment
+        year_key = f'PSB-{y}'
+        try:
+            seq_res = sb.rpc('gtap_next_seq', {'p_key': year_key}).execute()
+            cnt = seq_res.data
+        except Exception:
+            # Fallback if RPC not deployed yet
+            cnt_res = sb.table('requests').select('id', count='exact').like('doc_no', f'{year_key}-%').execute()
+            cnt = (cnt_res.count or 0) + 1
+        doc_no  = f'PSB-{y}-{str(cnt).zfill(3)}'
         req_res = sb.table('requests').insert({
             'doc_no': doc_no,
             'issue_date': d.get('issueDate'), 'request_date': d.get('requestDate'),
@@ -389,6 +497,7 @@ def create_request():
     return jsonify({'id': req_id, 'docNo': doc_no, 'message': 'Created'}), 201
 
 @app.route('/api/requests/<int:rid>/status', methods=['PATCH'])
+@require_auth()
 def update_status(rid):
     d = request.json or {}
     status = d.get('status')
@@ -419,6 +528,7 @@ def update_status(rid):
     return jsonify({'message': 'Updated'})
 
 @app.route('/api/requests/<int:rid>', methods=['DELETE'])
+@require_auth(['admin'])
 def delete_request(rid):
     if USE_SQLITE:
         conn = get_db()
@@ -437,23 +547,27 @@ def delete_request(rid):
     return jsonify({'message': 'Deleted'})
 
 @app.route('/api/stats')
+@require_auth()
 def stats():
+    IN_PROGRESS = ('Pending','Acct_Approved','Buyer_Approved','Mkt_Approved','Mkt_Returned')
     if USE_SQLITE:
         conn = get_db()
         c = conn.cursor()
         c.execute('SELECT COUNT(*) FROM requests'); t = c.fetchone()[0]
-        c.execute("SELECT COUNT(*) FROM requests WHERE status='Pending'"); p = c.fetchone()[0]
-        c.execute("SELECT COUNT(*) FROM requests WHERE status='Approved'"); a = c.fetchone()[0]
-        c.execute('SELECT COUNT(*) FROM products'); i = c.fetchone()[0]
+        ph = ','.join('?' * len(IN_PROGRESS))
+        c.execute(f'SELECT COUNT(*) FROM requests WHERE status IN ({ph})', IN_PROGRESS); ip = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM requests WHERE status='Done'"); done = c.fetchone()[0]
+        c.execute('SELECT COUNT(*) FROM products'); items = c.fetchone()[0]
         conn.close()
     else:
-        t = (sb.table('requests').select('id', count='exact').execute()).count or 0
-        p = (sb.table('requests').select('id', count='exact').eq('status', 'Pending').execute()).count or 0
-        a = (sb.table('requests').select('id', count='exact').eq('status', 'Approved').execute()).count or 0
-        i = (sb.table('products').select('id', count='exact').execute()).count or 0
-    return jsonify({'total': t, 'pending': p, 'approved': a, 'items': i})
+        t    = (sb.table('requests').select('id', count='exact').execute()).count or 0
+        ip   = (sb.table('requests').select('id', count='exact').in_('status', list(IN_PROGRESS)).execute()).count or 0
+        done = (sb.table('requests').select('id', count='exact').eq('status', 'Done').execute()).count or 0
+        items = (sb.table('products').select('id', count='exact').execute()).count or 0
+    return jsonify({'total': t, 'in_progress': ip, 'done': done, 'items': items})
 
 @app.route('/api/logs')
+@require_auth()
 def get_logs():
     if USE_SQLITE:
         conn = get_db()
@@ -467,6 +581,7 @@ def get_logs():
     return jsonify(rows)
 
 @app.route('/api/import-excel', methods=['POST'])
+@require_auth()
 def import_excel():
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
@@ -485,18 +600,8 @@ def import_excel():
         if hasattr(v, 'strftime'): return v.strftime('%Y-%m-%d')
         return str(v) if v else ''
 
-    # ── Header (first sheet, rows are 0-indexed) ──────────────
     ws0 = wb.worksheets[0]
     rows0 = list(ws0.iter_rows(values_only=True))
-    # Excel rows 3-11 = Python indices 2-10 (file has 2 blank rows at top)
-    # Row 4 (idx 3): Issue Date(C=2), Purpose text(O=14), Doc No(W=22)
-    # Row 5 (idx 4): Request Date(C=2)
-    # Row 6 (idx 5): Factory(C=2)
-    # Row 7 (idx 6): User Name(C=2)
-    # Row 8 (idx 7): Dept(C=2), Purpose Desc(O=14)
-    # Row 9 (idx 8): Section(C=2)
-    # Row 10 (idx 9): Ext(C=2)
-    # Row 11 (idx 10): Email(C=2)
     header = {
         'issueDate':   fmt_date(cell(rows0, 3, 2)),
         'requestDate': fmt_date(cell(rows0, 4, 2)),
@@ -511,15 +616,13 @@ def import_excel():
         'docNo':       str(cell(rows0, 3, 22)),
     }
 
-    # ── Products (all sheets except first) ────────────────────
     products = []
     for ws in wb.worksheets[1:]:
         rows_p = list(ws.iter_rows(values_only=True))
         i = 0
         while i < len(rows_p):
-            r1 = rows_p[i]
+            r1  = rows_p[i]
             seq = r1[0] if r1 else None
-            # product data row: col A is a positive integer
             if isinstance(seq, (int, float)) and not isinstance(seq, bool) and seq == int(seq) and int(seq) > 0:
                 r2 = rows_p[i + 1] if i + 1 < len(rows_p) else [None] * 26
                 new_old = 'P' if r1[10] else ('O' if (len(r1) > 11 and r1[11]) else 'P')
@@ -576,24 +679,19 @@ def _build_gtap_wb(requests_products):
     import openpyxl, io
     from openpyxl.styles import Font, Alignment
 
-    # Read template bytes so we can load within same workbook (copy_worksheet requires same wb)
     with open(TEMPLATE_PATH, 'rb') as _f:
         _tpl_bytes = _f.read()
 
-    # Load template as the working workbook; copy_worksheet works within same wb
     wb = openpyxl.load_workbook(io.BytesIO(_tpl_bytes))
-    # Keep only the two template sheets as originals; remove extras
     for name in list(wb.sheetnames):
         if name not in [wb.worksheets[0].title, 'detail D92A KRT']:
             del wb[name]
     tpl_psb_title = wb.worksheets[0].title
 
-    # For each request, copy the template sheets, fill values, then remove originals at the end
     for req, prods in requests_products:
         sheet_name = (req.get('doc_no') or f'REQ-{req["id"]}').replace('/', '-')[:28]
         det_name   = f'{sheet_name[:24]}-Det'
 
-        # Copy template sheets (within same workbook — this is allowed)
         ws  = wb.copy_worksheet(wb[tpl_psb_title])
         ws.title = sheet_name
         det = wb.copy_worksheet(wb['detail D92A KRT'])
@@ -601,7 +699,6 @@ def _build_gtap_wb(requests_products):
         sheet_name = (req.get('doc_no') or f'REQ-{req["id"]}').replace('/', '-')[:31]
         ws.title = sheet_name
 
-        # ── Fill header fields ───────────────────────────────────
         ws['C4']  = req.get('issue_date', '')
         ws['C5']  = req.get('request_date', '')
         ws['C6']  = req.get('factory', '')
@@ -610,34 +707,21 @@ def _build_gtap_wb(requests_products):
         ws['C9']  = req.get('section', '')
         ws['C10'] = req.get('ext', '')
         ws['C11'] = req.get('email', '')
-
-        # Product type goes next to the "* Product Type." label at F3
         ws['H3']  = req.get('product_type', '')
-
-        # Reason of Order / Purpose section (right of N3)
-        purpose = req.get('purpose', '')
-        ws['O4'] = f'  ☑ {purpose}' if purpose else ''
-        ws['O8'] = req.get('purpose_desc', '')
-
-        # Doc No (cell V4, merged V4:X5)
+        purpose   = req.get('purpose', '')
+        ws['O4']  = f'  ☑ {purpose}' if purpose else ''
+        ws['O8']  = req.get('purpose_desc', '')
         ws['V4']  = req.get('doc_no', '')
-        # Order Type value (cell V6, merged V6:X7) — override the "Order Type" label
         ws['V6']  = req.get('order_type', '')
         ws['V6'].font      = Font(bold=False, size=18, name='Calibri')
         ws['V6'].alignment = Alignment(horizontal='center', vertical='center')
-
-        # Status in far right
         ws['Y6']  = req.get('status', '')
 
-        # ── Fill detail sheet (det already copied above) ──────────
-        # Calculate remark row dynamically (2 rows per product, starting at row 7)
         REMARK_ROW = max(21, 7 + len(prods) * 2 + 1)
-        # Clear sample product rows (7 onward) up to remark row
         for row_num in range(7, REMARK_ROW):
             for col_num in range(1, 27):
                 det.cell(row=row_num, column=col_num).value = None
 
-        # Fill products (2 rows per product: row1=main, row2=sub)
         for i, p in enumerate(prods):
             r1 = 7 + i * 2
             r2 = r1 + 1
@@ -669,7 +753,6 @@ def _build_gtap_wb(requests_products):
         det.cell(REMARK_ROW, 1).value  = req.get('remark', '')
         det.cell(REMARK_ROW, 20).value = req.get('payment', '')
 
-    # Remove original template sheets now that all requests are processed
     for name in [tpl_psb_title, 'detail D92A KRT']:
         if name in wb.sheetnames:
             del wb[name]
@@ -677,6 +760,7 @@ def _build_gtap_wb(requests_products):
     return wb
 
 @app.route('/api/export-excel/<int:rid>')
+@require_auth()
 def export_excel(rid):
     from flask import Response
     import io
@@ -692,6 +776,7 @@ def export_excel(rid):
                     headers={'Content-Disposition': f'attachment; filename="{fname}"'})
 
 @app.route('/api/export-excel-all')
+@require_auth()
 def export_excel_all():
     from flask import Response
     import io

@@ -3,3 +3,4 @@ flask-cors
 supabase
 openpyxl
 gunicorn
+bcrypt
