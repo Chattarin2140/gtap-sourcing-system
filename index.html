@@ -1166,7 +1166,7 @@ async function importExcel(file) {
   form.append('file', file);
   let data;
   try {
-    const res = await fetch('/api/import-excel', { method: 'POST', body: form });
+    const res = await fetch('/api/import-excel', { method: 'POST', body: form, headers: {'Authorization': `Bearer ${getToken()}`} });
     data = await res.json();
   } catch(e) {
     alert('Error: ' + e.message);
