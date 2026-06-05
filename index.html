@@ -758,7 +758,7 @@ function applySession(found) {
   document.getElementById('f-uname').value = found.name;
   document.getElementById('f-dept').value = found.dept || '';
   document.getElementById('f-email').value = found.email || '';
-  updateBadge(); renderDash();
+  updateBadge(); renderDash(); renderCharts();
 }
 
 function doLogout() {
@@ -785,8 +785,8 @@ function showPage(id) {
   if (nav) nav.classList.add('active');
   document.getElementById('pg-title').textContent = pgs[id]||'';
   document.getElementById('pg-sub').textContent = subs[id]||'';
-  if (id==='dash') { loadData().then(()=>{renderDash();renderCharts();}); }
-  if (id==='hist') { loadData().then(renderHist); }
+  if (id==='dash')  { loadData().then(()=>{renderDash();renderCharts();}); }
+  if (id==='hist')  { fetchRequests(1, SEARCH_Q, SEARCH_ST, SEARCH_FC); }
   if (id==='users') { loadData().then(renderUsers); }
   if (id==='new') { genDoc(); initDates(); }
 }
@@ -1364,9 +1364,11 @@ function exportPDFAll() {
 }
 
 // ── INIT ─────────────────────────────────────────────────────
-if (CU) {
+if (CU && getToken()) {
   loadData().then(() => applySession(CU));
 } else {
+  // No token (e.g. old session before auth update) → force re-login
+  if (CU && !getToken()) { localStorage.removeItem('gtap_cu'); CU = null; }
   updateBadge();
 }
 </script>
