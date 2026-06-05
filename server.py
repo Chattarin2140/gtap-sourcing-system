@@ -675,6 +675,100 @@ def _fetch_request_and_products(rid):
         prods = res2.data or []
     return r, prods
 
+def _add_approval_flow(det, start_row=26):
+    """Add the department approval-flow section below the remark/payment rows."""
+    from openpyxl.styles import Font, Alignment, Border, Side
+
+    thin  = Side(style='thin')
+    empty = Side()
+
+    def _border(left=True, right=True, top=True, bottom=True):
+        return Border(left=thin if left else empty, right=thin if right else empty,
+                      top=thin if top else empty, bottom=thin if bottom else empty)
+
+    def _region_border(row, col_s, col_e, **bkw):
+        for c in range(col_s, col_e + 1):
+            det.cell(row, c).border = _border(
+                left=(c == col_s), right=(c == col_e), **bkw)
+
+    def _set(row, col, val='', bold=False, sz=7, wrap=True):
+        cell = det.cell(row, col)
+        cell.value = val
+        cell.font  = Font(bold=bold, size=sz, name='Calibri')
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=wrap)
+
+    def _merge_set(row, col_s, col_e, val, bold=False, sz=8):
+        if col_s < col_e:
+            det.merge_cells(start_row=row, start_column=col_s,
+                            end_row=row, end_column=col_e)
+        _set(row, col_s, val, bold=bold, sz=sz)
+
+    R = start_row        # dept header
+    S = start_row + 1    # sub-column names
+    T = start_row + 2    # signature space
+
+    det.row_dimensions[R].height = 30
+    det.row_dimensions[S].height = 13
+    det.row_dimensions[T].height = 35
+
+    # ── Column layout ──────────────────────────────────────────────────────────
+    # Block 1 (User):  cols 1-4   (A-D)
+    # Arrow:           col  5     (E)
+    # Block 2 (ACC):   cols 6-8   (F-H)
+    # Arrow:           col  9     (I)
+    # Block 3 (Buyer): cols 10-12 (J-L)
+    # Arrow:           col 13     (M)
+    # Block 4 (MK):    cols 14-16 (N-P)
+    # Arrow:           col 17     (Q)
+    # Block 5 (Route): cols 18-26 (R-Z)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    BLOCKS = [
+        (1,  4,  'TGAS/TGT/TGRT/\nUser Dept.',           ['GM','AGM','MGR','Issued']),
+        (6,  8,  'TGT/TGRT/\nACC. Dept.',                ['MGR','In charge']),
+        (10, 12, 'TGA S/TGT/TGRT/\nBuyer Dept.',         ['MGR','SUP','In charge']),
+        (14, 16, 'TGA S/MK\nDept.',                       ['MGR','SUP','In charge']),
+    ]
+    ARROWS = [5, 9, 13, 17]
+
+    ROUTING = [
+        (18, 19, 'TGT/TGRT/\nPDO (PUR)'),
+        (20, 21, 'BOI'),
+        (22, 23, 'ODC'),
+        (24, 26, 'TGAS/\nPPA'),
+    ]
+
+    for c_s, c_e, label, subs in BLOCKS:
+        # Dept header
+        _merge_set(R, c_s, c_e, label, bold=True, sz=8)
+        for row in (R, S, T):
+            _region_border(row, c_s, c_e, top=(row == R), bottom=(row == T))
+
+        # Sub-col names: 1 col each, last sub absorbs remaining cols
+        for i, sub in enumerate(subs):
+            cs = c_s + i
+            ce = c_e if i == len(subs) - 1 else c_s + i
+            if cs < ce:
+                det.merge_cells(start_row=S, start_column=cs, end_row=S, end_column=ce)
+            _set(S, cs, sub, sz=7)
+
+        # Signature row: merge whole block
+        _merge_set(T, c_s, c_e, '')
+
+    for ac in ARROWS:
+        _set(R, ac, '→', sz=11)
+        det.cell(R, ac).border = _border(top=True, bottom=False, left=False, right=False)
+
+    # Routing header + sub-cols + signature
+    _merge_set(R, 18, 26, 'Routing / Dept. to Send', bold=True, sz=8)
+    _region_border(R, 18, 26, top=True, bottom=False)
+    for c_s, c_e, label in ROUTING:
+        _merge_set(S, c_s, c_e, label, sz=7)
+        _region_border(S, c_s, c_e, top=True, bottom=False)
+        _merge_set(T, c_s, c_e, '')
+        _region_border(T, c_s, c_e, top=True, bottom=True)
+
+
 def _build_gtap_wb(requests_products):
     """Build workbook from template for one or more (request, products) pairs."""
     import openpyxl, io
@@ -767,6 +861,8 @@ def _build_gtap_wb(requests_products):
 
         det.cell(REMARK_ROW, 1).value  = req.get('remark', '')
         det.cell(REMARK_ROW, 20).value = req.get('payment', '')
+
+        _add_approval_flow(det, start_row=max(26, REMARK_ROW + 5))
 
     for name in [tpl_psb_title, 'detail D92A KRT']:
         if name in wb.sheetnames:
