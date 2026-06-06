@@ -395,13 +395,21 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
                 <div class="tg-label"><i class="ti ti-car"></i> Automotive Group</div>
                 <div class="cb-col">
                   <label class="cbi"><input type="checkbox" name="pt" value="New Model"> New Model</label>
-                  <label class="cbi"><input type="checkbox" name="pt" value="Modify/ECI"> Modify/ECI, QE MEMO</label>
-                  <label class="cbi"><input type="checkbox" name="pt" value="Mold"> Mold</label>
-                  <label class="cbi"><input type="checkbox" name="pt" value="Jig&CF"> Jig &amp; CF</label>
-                  <label class="cbi"><input type="checkbox" name="pt" value="TGT Pay (11603)"> TGT Pay (11603)</label>
-                  <label class="cbi"><input type="checkbox" name="pt" value="Customer Pay (11603)"> Customer Pay (11603)</label>
-                  <label class="cbi"><input type="checkbox" name="pt" value="Amortization (12603)"> Amortization (12603)</label>
-                  <label class="cbi"><input type="checkbox" name="pt" value="Mass Production (66302)"> Mass Production (66302)</label>
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <label class="cbi"><input type="checkbox" name="pt" value="Modify/ECI"> Modify/ECI, QE MEMO No.</label>
+                    <input type="text" id="f-eci-no" placeholder="No." style="width:110px;font-size:12px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;height:22px;background:var(--surface)">
+                  </div>
+                  <div style="margin-top:4px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg)">
+                    <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:.4px">PRODUCT TYPE</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 12px">
+                      <label class="cbi"><input type="checkbox" name="pt" value="Mold"> Mold</label>
+                      <label class="cbi"><input type="checkbox" name="pt" value="Jig&CF"> Jig &amp; CF</label>
+                      <label class="cbi"><input type="checkbox" name="pt" value="TGT Pay (11603)"> TGT Pay (11603)</label>
+                      <label class="cbi"><input type="checkbox" name="pt" value="Customer Pay (11603)"> Customer Pay (11603)</label>
+                      <label class="cbi"><input type="checkbox" name="pt" value="Amortization (12603)"> Amortization (12603)</label>
+                      <label class="cbi"><input type="checkbox" name="pt" value="Mass Production (66302)"> Mass Production (66302)</label>
+                    </div>
+                  </div>
                   <label class="cbi"><input type="checkbox" name="pt" value="Auto-Part (66202)"> Auto-Part (66202)</label>
                   <label class="cbi"><input type="checkbox" name="pt" value="Material&Chemical (66203)"> Material &amp; Chemical (66203)</label>
                 </div>
@@ -416,9 +424,11 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
                   <label class="cbi"><input type="checkbox" name="pt" value="Tool/Equipment"> Tool / Equipment</label>
                   <label class="cbi"><input type="checkbox" name="pt" value="Stationary"> Stationary</label>
                   <label class="cbi"><input type="checkbox" name="pt" value="Package"> Package</label>
-                  <label class="cbi"><input type="checkbox" name="pt" value="Other"> Other</label>
                 </div>
               </div>
+            </div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
+              <label class="cbi"><input type="checkbox" name="pt" value="Other"> Other <span style="font-size:11px;color:var(--muted);margin-left:4px">(อธิบายรายละเอียดของ Product ใช้ได้ทั้ง 2 Group)</span></label>
             </div>
           </div>
           <div class="card">
@@ -487,7 +497,11 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
         <div class="page" id="page-users">
           <div class="card">
             <div class="abar"><div class="card-title" style="margin:0;border:none;padding:0"><i class="ti ti-users"></i> User Management</div>
-              <button class="btn btn-primary btn-sm" onclick="openAddUser()"><i class="ti ti-plus"></i> Add User</button></div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm" onclick="document.getElementById('csv-import-file').click()"><i class="ti ti-file-import"></i> Import CSV</button>
+                <input type="file" id="csv-import-file" accept=".csv" style="display:none" onchange="importUsersCSV(this.files[0])">
+                <button class="btn btn-primary btn-sm" onclick="openAddUser()"><i class="ti ti-plus"></i> Add User</button>
+              </div></div>
             <div id="user-list"></div>
           </div>
           <div class="card">
@@ -532,7 +546,7 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
           <option value="marketing">Marketing (อนุมัติ)</option>
           <option value="admin">Admin (เต็มสิทธิ์)</option>
         </select></div>
-      <div class="fg"><label class="lbl">Department</label><input type="text" id="mu-dept" placeholder="เช่น PR30"></div>
+      <div class="fg"><label class="lbl">Department</label><input type="text" id="mu-dept" placeholder="เช่น PR30" oninput="autoFillRole('mu-dept','mu-role')"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-user')">ยกเลิก</button>
@@ -559,7 +573,7 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
           <option value="marketing">Marketing (อนุมัติ)</option>
           <option value="admin">Admin (เต็มสิทธิ์)</option>
         </select></div>
-      <div class="fg"><label class="lbl">Department</label><input type="text" id="eu-dept" placeholder="เช่น PR30"></div>
+      <div class="fg"><label class="lbl">Department</label><input type="text" id="eu-dept" placeholder="เช่น PR30" oninput="autoFillRole('eu-dept','eu-role')"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-edit-user')">ยกเลิก</button>
@@ -604,6 +618,29 @@ function toCamel(obj) {
 
 // ── DATA (in-memory, loaded from API) ─────────────────────────
 let USERS = [];
+
+// Department → Role mapping
+const DEPT_ROLE_MAP = [
+  {prefix:'PR30',  role:'buyer'},
+  {prefix:'PO30',  role:'buyer'},
+  {prefix:'AC30',  role:'accounting'},
+  {match:'Accounting', role:'accounting'},
+  {prefix:'1SBP',  role:'marketing'},
+  {match:'Business Planning', role:'marketing'},
+  {match:'Sales',  role:'marketing'},
+];
+function getDeptRole(dept) {
+  if (!dept) return '';
+  for (const m of DEPT_ROLE_MAP) {
+    if (m.prefix && dept.toUpperCase().startsWith(m.prefix.toUpperCase())) return m.role;
+    if (m.match && dept.toLowerCase().includes(m.match.toLowerCase())) return m.role;
+  }
+  return '';
+}
+function autoFillRole(deptId, roleId) {
+  const r = getDeptRole(document.getElementById(deptId).value);
+  if (r) document.getElementById(roleId).value = r;
+}
 
 const STATUS_LABEL = {
   'Pending':       'รอบัญชีตรวจ',
@@ -883,7 +920,7 @@ async function submitReq() {
     issueDate:V('f-iss'), requestDate:V('f-rdt'), factory:V('f-fac'),
     userName:V('f-uname'), dept:V('f-dept'), section:V('f-sec'),
     ext:V('f-ext'), email:V('f-email'), purpose:purpose.join(', '), orderType:ot.join(', '),
-    purposeDesc:V('f-pdesc'), productType:VC('pt'), remark:V('f-rmk'),
+    purposeDesc:V('f-pdesc'), productType:(()=>{ const pt=VC('pt'); const eno=V('f-eci-no'); return eno&&pt.includes('Modify/ECI') ? pt.replace('Modify/ECI',`Modify/ECI No.${eno}`) : pt; })(), remark:V('f-rmk'),
     payment:V('f-pay'), status:'Pending', products:getRows(), createdBy:CU?.name||''
   };
 
@@ -1152,6 +1189,40 @@ async function removeUser(id) {
   if (res.error) { toast('เกิดข้อผิดพลาด: '+res.error, 'err'); return; }
   await loadData(); renderUsers();
   toast('ลบ User เรียบร้อย');
+}
+
+// ── CSV USER IMPORT ───────────────────────────────────────────
+async function importUsersCSV(file) {
+  if (!file) return;
+  const text = await file.text();
+  const lines = text.trim().split('\n').slice(1); // skip header
+  const rows = lines.map(l => {
+    const cols = l.split(',');
+    return { empId: cols[0]?.trim(), name: cols[1]?.trim(), dept: cols[3]?.trim() };
+  }).filter(r => r.empId && r.name);
+
+  const toImport = rows
+    .map(r => ({ username: r.empId, password: r.empId + '@TG', name: r.name, dept: r.dept, role: getDeptRole(r.dept), email: '' }))
+    .filter(u => u.role); // only include rows with a matched role
+
+  if (!toImport.length) { toast('ไม่พบข้อมูลที่ตรง role ใด ๆ', 'err'); document.getElementById('csv-import-file').value=''; return; }
+
+  const counts = {};
+  toImport.forEach(u => { counts[u.role] = (counts[u.role]||0)+1; });
+  const summary = Object.entries(counts).map(([r,c])=>`${r}: ${c} คน`).join(', ');
+
+  if (!confirm(`จะนำเข้า ${toImport.length} คน\n${summary}\n\nUsername = รหัสพนักงาน\nPassword = รหัสพนักงาน@TG\n\nดำเนินการ?`)) {
+    document.getElementById('csv-import-file').value=''; return;
+  }
+
+  let ok=0, skip=0;
+  for (const u of toImport) {
+    const res = await api('POST', '/api/users', u);
+    if (res.error) skip++; else ok++;
+  }
+  await loadData(); renderUsers();
+  toast(`นำเข้าสำเร็จ ${ok} คน${skip?' (ซ้ำ/ผิดพลาด '+skip+' คน)':''}`);
+  document.getElementById('csv-import-file').value='';
 }
 
 // ── EXCEL IMPORT ──────────────────────────────────────────────
