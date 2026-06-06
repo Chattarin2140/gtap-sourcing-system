@@ -873,6 +873,11 @@ function addRow() {
   const tbody = document.getElementById('prod-body');
   const empty = document.getElementById('empty-row');
   if (empty) empty.remove();
+  const role = CU?.role;
+  // accounting: up to Budget No. only; buyer: up to MOQ; others: all fields
+  const disabledAfterBudget = role === 'accounting';
+  const disabledRemark      = role === 'accounting' || role === 'buyer';
+  const dis = (flag) => flag ? 'disabled style="background:#f1f5f9;color:#94a3b8;cursor:not-allowed;' : 'style="';
   const tr = document.createElement('tr');
   tr.id = `pr-${id}`;
   tr.innerHTML = `
@@ -883,16 +888,16 @@ function addRow() {
     <td><input type="number" id="r${id}q" style="width:50px" value="1" min="1"></td>
     <td><select id="r${id}u" style="width:65px"><option>Set</option><option>Pcs</option><option>Box</option><option>Lot</option><option>Kg</option><option>M</option></select></td>
     <td><input type="text" id="r${id}b" style="width:70px" placeholder="Budget"></td>
-    <td><input type="text" id="r${id}gc" style="width:80px" placeholder="GTAP Code"></td>
-    <td><input type="text" id="r${id}gn" style="width:140px" placeholder="GTAP Name"></td>
-    <td><select id="r${id}no" style="width:60px"><option value="P">P (New)</option><option value="O">O (Old)</option></select></td>
-    <td><input type="text" id="r${id}sc" style="width:70px" placeholder="Code"></td>
-    <td><input type="text" id="r${id}sn" style="width:120px" placeholder="Supplier"></td>
-    <td><input type="number" id="r${id}lt" style="width:50px" placeholder="14"></td>
-    <td><select id="r${id}cy" style="width:65px"><option>THB</option><option>USD</option><option>JPY</option><option>EUR</option></select></td>
-    <td><input type="number" id="r${id}pr" style="width:75px" placeholder="0"></td>
-    <td><input type="number" id="r${id}mq" style="width:50px" value="1"></td>
-    <td><input type="text" id="r${id}rm" style="width:90px" placeholder="หมายเหตุ"></td>
+    <td><input type="text" id="r${id}gc" ${dis(disabledAfterBudget)}width:80px" placeholder="GTAP Code"></td>
+    <td><input type="text" id="r${id}gn" ${dis(disabledAfterBudget)}width:140px" placeholder="GTAP Name"></td>
+    <td><select id="r${id}no" ${dis(disabledAfterBudget)}width:60px"><option value="P">P (New)</option><option value="O">O (Old)</option></select></td>
+    <td><input type="text" id="r${id}sc" ${dis(disabledAfterBudget)}width:70px" placeholder="Code"></td>
+    <td><input type="text" id="r${id}sn" ${dis(disabledAfterBudget)}width:120px" placeholder="Supplier"></td>
+    <td><input type="number" id="r${id}lt" ${dis(disabledAfterBudget)}width:50px" placeholder="14"></td>
+    <td><select id="r${id}cy" ${dis(disabledAfterBudget)}width:65px"><option>THB</option><option>USD</option><option>JPY</option><option>EUR</option></select></td>
+    <td><input type="number" id="r${id}pr" ${dis(disabledAfterBudget)}width:75px" placeholder="0"></td>
+    <td><input type="number" id="r${id}mq" ${dis(disabledAfterBudget)}width:50px" value="1"></td>
+    <td><input type="text" id="r${id}rm" ${dis(disabledRemark)}width:90px" placeholder="หมายเหตุ"></td>
     <td><button class="btn btn-sm btn-danger btn-icon" onclick="delRow(${id})"><i class="ti ti-trash"></i></button></td>
   `;
   tbody.appendChild(tr);
