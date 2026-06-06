@@ -221,13 +221,6 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
 .u-name{font-size:13px;font-weight:600}
 .u-meta{font-size:11px;color:var(--muted)}
 
-/* ACTIVITY LOG */
-.log-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
-.log-item:last-child{border-bottom:none}
-.log-dot{width:8px;height:8px;border-radius:50%;background:#2563eb;flex-shrink:0;margin-top:5px}
-.log-dot.ok{background:#10b981}.log-dot.warn{background:#f59e0b}.log-dot.err{background:#ef4444}
-.log-text{font-size:12px;color:var(--text)}
-.log-time{font-size:11px;color:var(--muted);margin-top:2px}
 
 @media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}.charts-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.form-grid.c3,.form-grid.c4{grid-template-columns:1fr 1fr}}
 </style>
@@ -332,10 +325,6 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
           </div>
           <div class="charts-grid">
             <div class="card"><div class="card-title"><i class="ti ti-chart-line"></i> Monthly Trend</div><div class="chart-wrap"><canvas id="chart-trend"></canvas></div></div>
-            <div class="card">
-              <div class="card-title"><i class="ti ti-activity"></i> Activity Log</div>
-              <div id="activity-log"><div class="empty"><i class="ti ti-list"></i><p>ยังไม่มีกิจกรรม</p></div></div>
-            </div>
           </div>
           <div class="card"><div class="card-title"><i class="ti ti-clock-hour-4"></i> Recent Requests</div><div id="dash-recent"></div></div>
         </div>
@@ -691,7 +680,6 @@ function getAvailableActions(r) {
   return [];
 }
 let DB = [];
-let LOGS = [];
 let STATS = null;
 let TOTAL_REQUESTS = 0;
 let CURRENT_PAGE   = 1;
@@ -701,10 +689,9 @@ let CU = JSON.parse(localStorage.getItem('gtap_cu') || 'null');
 
 async function loadData() {
   const params = new URLSearchParams({page: 1, per_page: PER_PAGE});
-  const [reqs, users, logs, stats] = await Promise.all([
+  const [reqs, users, stats] = await Promise.all([
     api('GET', `/api/requests?${params}`),
     api('GET', '/api/users'),
-    api('GET', '/api/logs'),
     api('GET', '/api/stats'),
   ]);
   const data    = reqs?.data ?? (Array.isArray(reqs) ? reqs : []);
@@ -712,7 +699,6 @@ async function loadData() {
   TOTAL_REQUESTS = reqs?.total ?? DB.length;
   CURRENT_PAGE   = 1;
   USERS = Array.isArray(users) ? users : [];
-  LOGS  = Array.isArray(logs)  ? logs  : [];
   STATS = (!stats || stats.error) ? null : stats;
   updateBadge();
 }
@@ -765,7 +751,6 @@ async function goPage(delta) {
   await fetchRequests(np, SEARCH_Q, SEARCH_ST, SEARCH_FC);
 }
 
-function addLog() {} // server logs automatically
 
 // ── AUTH ──────────────────────────────────────────────────────
 async function doLogin() {
@@ -812,7 +797,7 @@ function applySession(found) {
 }
 
 function doLogout() {
-  CU = null; DB = []; USERS = []; LOGS = []; STATS = null;
+  CU = null; DB = []; USERS = []; STATS = null;
   localStorage.removeItem('gtap_cu');
   localStorage.removeItem('gtap_token');
   document.getElementById('app').style.display = 'none';
@@ -1034,17 +1019,6 @@ function renderDash() {
   document.getElementById('s3').textContent = STATS?.items       ?? DB.reduce((s,r)=>s+(r.products?.length||0),0);
   const el=document.getElementById('dash-recent');
   if(!DB.length){el.innerHTML=`<div class="empty"><i class="ti ti-inbox"></i><p>ยังไม่มี Request</p></div>`;} else {el.innerHTML=DB.slice(0,5).map(r=>rcHtml(r,false)).join('');}
-  renderActivityLog();
-}
-
-function renderActivityLog() {
-  const el = document.getElementById('activity-log');
-  if (!LOGS.length) { el.innerHTML=`<div class="empty"><i class="ti ti-list"></i><p>ยังไม่มีกิจกรรม</p></div>`; return; }
-  el.innerHTML = LOGS.slice(0,8).map(l=>`
-    <div class="log-item">
-      <div class="log-dot ${l.type||'ok'}"></div>
-      <div><div class="log-text">${l.msg}</div><div class="log-time">${fmtTime(l.created_at||l.time)}</div></div>
-    </div>`).join('');
 }
 
 function fmtTime(iso) {
@@ -1445,7 +1419,7 @@ function buildPDF(r) {
 function exportPDF(id) {
   const r=DB.find(x=>x.id===id);
   if(!r){toast('ไม่พบข้อมูล','err');return;}
-  try{ const d=buildPDF(r); d.save(`GTAP_${r.docNo}.pdf`); toast(`Export PDF ${r.docNo} สำเร็จ`); addLog(`Export PDF: ${r.docNo}`); }
+  try{ const d=buildPDF(r); d.save(`GTAP_${r.docNo}.pdf`); toast(`Export PDF ${r.docNo} สำเร็จ`); }
   catch(e){ toast('PDF export ผิดพลาด: '+e.message,'err'); console.error(e); }
 }
 
