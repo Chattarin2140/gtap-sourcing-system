@@ -67,6 +67,8 @@ body{font-family:'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--t
 .sb-user-role{font-size:10px;color:rgba(255,255,255,.45)}
 .sb-logout{background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;padding:2px;font-size:14px}
 .sb-logout:hover{color:#fff}
+.sb-chpw{background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;padding:2px;font-size:14px}
+.sb-chpw:hover{color:#fff}
 .sb-nav{flex:1;padding:10px 8px}
 .sb-label{font-size:10px;font-weight:600;color:rgba(255,255,255,.3);letter-spacing:1px;text-transform:uppercase;padding:10px 8px 5px}
 .nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.6);transition:all .15s;margin-bottom:1px;user-select:none}
@@ -284,6 +286,7 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
           <div class="sb-user-name" id="sb-uname">Admin</div>
           <div class="sb-user-role" id="sb-urole">Administrator</div>
         </div>
+        <button class="sb-chpw" onclick="openChangePw()" title="เปลี่ยนรหัสผ่าน"><i class="ti ti-key"></i></button>
         <button class="sb-logout" onclick="doLogout()" title="ออกจากระบบ"><i class="ti ti-logout"></i></button>
       </div>
       <nav class="sb-nav">
@@ -575,6 +578,22 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
   </div>
 </div>
 
+<!-- CHANGE PASSWORD MODAL -->
+<div class="modal-bg" id="modal-chpw">
+  <div class="modal">
+    <h3><i class="ti ti-key"></i> เปลี่ยนรหัสผ่าน</h3>
+    <div class="form-grid" style="gap:12px">
+      <div class="fg full"><label class="lbl">รหัสผ่านปัจจุบัน <span class="req">*</span></label><input type="password" id="cp-old" placeholder="••••••••"></div>
+      <div class="fg full"><label class="lbl">รหัสผ่านใหม่ <span class="req">*</span></label><input type="password" id="cp-new" placeholder="••••••••"></div>
+      <div class="fg full"><label class="lbl">ยืนยันรหัสผ่านใหม่ <span class="req">*</span></label><input type="password" id="cp-con" placeholder="••••••••"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-chpw')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doChangePw()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toasts"></div>
 
@@ -801,6 +820,24 @@ function doLogout() {
   document.getElementById('li-user').value = '';
   document.getElementById('li-pass').value = '';
   document.getElementById('login-err').style.display = 'none';
+}
+
+function openChangePw() {
+  ['cp-old','cp-new','cp-con'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('modal-chpw').classList.add('open');
+}
+
+async function doChangePw() {
+  const oldPw = document.getElementById('cp-old').value;
+  const newPw = document.getElementById('cp-new').value;
+  const conPw = document.getElementById('cp-con').value;
+  if (!oldPw || !newPw || !conPw) { toast('กรอกข้อมูลให้ครบ', 'err'); return; }
+  if (newPw !== conPw) { toast('รหัสผ่านใหม่ไม่ตรงกัน', 'err'); return; }
+  if (newPw.length < 6) { toast('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัว', 'err'); return; }
+  const res = await api('PUT', '/api/users/me/password', { old_password: oldPw, new_password: newPw });
+  if (res.error) { toast(res.error, 'err'); return; }
+  closeModal('modal-chpw');
+  toast('เปลี่ยนรหัสผ่านสำเร็จ');
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────

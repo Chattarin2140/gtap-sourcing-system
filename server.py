@@ -365,6 +365,32 @@ def delete_user(uid):
         sb.table('users').delete().eq('id', uid).execute()
     return jsonify({'message': 'Deleted'})
 
+@app.route('/api/users/me/password', methods=['PUT'])
+@require_auth()
+def change_my_password():
+    d = request.json or {}
+    old_pw  = d.get('old_password', '')
+    new_pw  = d.get('new_password', '')
+    if not old_pw or not new_pw:
+        return jsonify({'error': 'กรอกข้อมูลให้ครบ'}), 400
+    if len(new_pw) < 6:
+        return jsonify({'error': 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัว'}), 400
+    uid = request.cu['uid']
+    if USE_SQLITE:
+        conn = get_db(); c = conn.cursor()
+        c.execute('SELECT password FROM users WHERE id=?', (uid,))
+        row = c.fetchone()
+        if not row or not _bcrypt.checkpw(old_pw.encode(), row['password'].encode()):
+            conn.close(); return jsonify({'error': 'รหัสผ่านปัจจุบันไม่ถูกต้อง'}), 400
+        c.execute('UPDATE users SET password=? WHERE id=?', (hash_pw(new_pw), uid))
+        conn.commit(); conn.close()
+    else:
+        res = sb.table('users').select('password').eq('id', uid).execute()
+        if not res.data or not _bcrypt.checkpw(old_pw.encode(), res.data[0]['password'].encode()):
+            return jsonify({'error': 'รหัสผ่านปัจจุบันไม่ถูกต้อง'}), 400
+        sb.table('users').update({'password': hash_pw(new_pw)}).eq('id', uid).execute()
+    return jsonify({'message': 'ok'})
+
 # ── REQUESTS ──────────────────────────────────────────────────
 @app.route('/api/requests')
 @require_auth()
