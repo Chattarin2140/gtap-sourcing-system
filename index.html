@@ -625,13 +625,14 @@ const DEPT_ROLE_MAP = [
   {prefix:'PO30',  role:'buyer'},
   {prefix:'AC30',  role:'accounting'},
   {match:'Accounting', role:'accounting'},
+  {exact:'Sales & Business Planning', role:'marketing'},
   {prefix:'1SBP',  role:'marketing'},
   {match:'Business Planning', role:'marketing'},
-  {match:'Sales',  role:'marketing'},
 ];
 function getDeptRole(dept) {
   if (!dept) return '';
   for (const m of DEPT_ROLE_MAP) {
+    if (m.exact && dept.trim() === m.exact) return m.role;
     if (m.prefix && dept.toUpperCase().startsWith(m.prefix.toUpperCase())) return m.role;
     if (m.match && dept.toLowerCase().includes(m.match.toLowerCase())) return m.role;
   }
