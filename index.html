@@ -425,7 +425,7 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
               <button class="btn btn-accent btn-sm" onclick="addRow()"><i class="ti ti-plus"></i> Add Item</button>
             </div>
             <div class="tbl-wrap">
-              <table id="prod-table"><thead><tr>
+              <table id="prod-table"><thead id="prod-thead" style="display:none"><tr>
                 <th>No.</th><th>Model</th><th>Product No.</th><th>Product Name</th><th>Qty</th><th>Unit</th>
                 <th>Q'ty/Box</th><th>Pur. Unit</th><th>Spec / รูป</th>
                 <th>Budget No.</th>
@@ -887,6 +887,7 @@ function addRow() {
   const tbody = document.getElementById('prod-body');
   const empty = document.getElementById('empty-row');
   if (empty) empty.remove();
+  document.getElementById('prod-thead').style.display = '';
   const role = CU?.role;
   const specCell = `<div style="display:flex;align-items:center;gap:4px"><button type="button" class="btn btn-sm" onclick="document.getElementById('r${id}spf').click()" style="padding:3px 8px;font-size:12px" title="แนบ PDF/รูป"><i class="ti ti-paperclip"></i></button><span id="r${id}sp-lbl" style="font-size:11px;color:var(--muted);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><input type="file" id="r${id}spf" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp" style="display:none" onchange="uploadSpec(${id},this)"><input type="hidden" id="r${id}sp" value=""></div>`;
   const tr = document.createElement('tr');
@@ -940,6 +941,7 @@ function delRow(id) {
   rowIds = rowIds.filter(x=>x!==id);
   if (!rowIds.length) {
     document.getElementById('prod-body').innerHTML = `<tr id="empty-row"><td colspan="29" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>`;
+    document.getElementById('prod-thead').style.display = 'none';
   }
   document.querySelectorAll('#prod-body tr:not(#empty-row)').forEach((tr,i)=>{ const f=tr.querySelector('td'); if(f) f.textContent=i+1; });
 }
@@ -1043,6 +1045,7 @@ function clearForm() {
   document.getElementById('f-email').value = CU?.email || '';
   document.querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=false);
   document.getElementById('prod-body').innerHTML=`<tr id="empty-row"><td colspan="29" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>`;
+  document.getElementById('prod-thead').style.display = 'none';
   rowIds=[]; genDoc();
 }
 
