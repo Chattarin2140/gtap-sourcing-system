@@ -529,6 +529,7 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
       <div class="fg"><label class="lbl">Email</label><input type="email" id="mu-email" placeholder="email@tgt.co.th"></div>
       <div class="fg"><label class="lbl">Role</label>
         <select id="mu-role">
+          <option value="user">User (กรอก No.→Budget)</option>
           <option value="viewer">Viewer (ดูอย่างเดียว)</option>
           <option value="accounting">Accounting (ตรวจงบ)</option>
           <option value="buyer">Buyer (จัดซื้อ)</option>
@@ -556,6 +557,7 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
       <div class="fg"><label class="lbl">Email</label><input type="email" id="eu-email" placeholder="email@tgt.co.th"></div>
       <div class="fg"><label class="lbl">Role</label>
         <select id="eu-role">
+          <option value="user">User (กรอก No.→Budget)</option>
           <option value="viewer">Viewer (ดูอย่างเดียว)</option>
           <option value="accounting">Accounting (ตรวจงบ)</option>
           <option value="buyer">Buyer (จัดซื้อ)</option>
@@ -637,13 +639,13 @@ const DEPT_ROLE_MAP = [
   {match:'Business Planning', role:'marketing'},
 ];
 function getDeptRole(dept) {
-  if (!dept) return '';
+  if (!dept) return 'user';
   for (const m of DEPT_ROLE_MAP) {
     if (m.exact && dept.trim() === m.exact) return m.role;
     if (m.prefix && dept.toUpperCase().startsWith(m.prefix.toUpperCase())) return m.role;
     if (m.match && dept.toLowerCase().includes(m.match.toLowerCase())) return m.role;
   }
-  return '';
+  return 'user';
 }
 function autoFillRole(deptId, roleId) {
   const r = getDeptRole(document.getElementById(deptId).value);
