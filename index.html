@@ -424,11 +424,15 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
             <div class="tbl-wrap">
               <table><thead><tr>
                 <th>No.</th><th>Model</th><th>Product No.</th><th>Product Name</th><th>Qty</th><th>Unit</th>
-                <th>Spec / รูป</th><th>Budget No.</th><th>GTAP Code</th><th>GTAP Name</th><th>P/O</th><th>Sup. Code</th>
-                <th>Supplier Name</th><th>Lead Time</th><th>Currency</th><th>Price</th><th>MOQ</th><th>Sample</th><th>Remark</th><th></th>
+                <th>Q'ty/Box</th><th>Pur. Unit</th><th>Spec / รูป</th>
+                <th>Budget No.</th><th>GTAP Code</th><th>GTAP Name</th><th>New</th><th>Old</th><th>Sup. Code</th>
+                <th>Supplier Name</th><th>Lead Time</th><th>Currency</th>
+                <th>Price Con. Factor</th><th>PUR Price</th><th>Cost Ratio(%)</th><th>Sale Price</th>
+                <th>BOI</th><th>Root Cause of Loss Profit</th><th>Over Spec.</th>
+                <th>MOQ</th><th>Sample</th><th>Remark</th><th></th>
               </tr></thead>
               <tbody id="prod-body">
-                <tr id="empty-row"><td colspan="20" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>
+                <tr id="empty-row"><td colspan="29" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>
               </tbody></table>
             </div>
           </div>
@@ -609,7 +613,8 @@ function toCamel(obj) {
     created_by:'createdBy',updated_by:'updatedBy',created_at:'createdAt',updated_at:'updatedAt',
     part_no:'partNo',gtap_code:'gtapCode',gtap_name:'gtapName',new_old:'newOld',
     sup_code:'supCode',sup_name:'supName',lead_time:'leadTime',prod_remark:'remark',
-    spec_url:'specUrl'};
+    spec_url:'specUrl',qty_box:'qtyBox',pur_unit:'purUnit',price_factor:'priceFactor',
+    cost_ratio:'costRatio',sale_price:'salePrice',root_cause:'rootCause',over_spec:'overSpec'};
   const r = {};
   for (const [k,v] of Object.entries(obj)) {
     const key = M[k]||k;
@@ -882,6 +887,7 @@ function addRow() {
   const specCell = `<div style="display:flex;align-items:center;gap:4px"><button type="button" class="btn btn-sm" onclick="document.getElementById('r${id}spf').click()" style="padding:3px 8px;font-size:12px" title="แนบ PDF/รูป"><i class="ti ti-paperclip"></i></button><span id="r${id}sp-lbl" style="font-size:11px;color:var(--muted);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><input type="file" id="r${id}spf" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp" style="display:none" onchange="uploadSpec(${id},this)"><input type="hidden" id="r${id}sp" value=""></div>`;
   const tr = document.createElement('tr');
   tr.id = `pr-${id}`;
+  const dab = disabledAfterBudget;
   tr.innerHTML = `
     <td class="nc">${rowIds.length}</td>
     <td><input type="text" id="r${id}m" style="width:65px" placeholder="Model"></td>
@@ -889,17 +895,26 @@ function addRow() {
     <td><input type="text" id="r${id}n" style="width:140px" placeholder="Product Name"></td>
     <td><input type="number" id="r${id}q" style="width:50px" value="1" min="1"></td>
     <td><select id="r${id}u" style="width:65px"><option>Set</option><option>Pcs</option><option>Box</option><option>Lot</option><option>Kg</option><option>M</option></select></td>
-    <td style="min-width:120px;padding:6px 4px">${specCell}</td>
+    <td><input type="text" id="r${id}qb" style="width:60px" placeholder="Q'ty"></td>
+    <td><input type="text" id="r${id}pu" style="width:60px" placeholder="Unit"></td>
+    <td style="min-width:110px;padding:6px 4px">${specCell}</td>
     <td><input type="text" id="r${id}b" style="width:70px" placeholder="Budget"></td>
-    <td><input type="text" id="r${id}gc" ${dis(disabledAfterBudget)}width:80px" placeholder="GTAP Code"></td>
-    <td><input type="text" id="r${id}gn" ${dis(disabledAfterBudget)}width:140px" placeholder="GTAP Name"></td>
-    <td><select id="r${id}no" ${dis(disabledAfterBudget)}width:60px"><option value="P">P (New)</option><option value="O">O (Old)</option></select></td>
-    <td><input type="text" id="r${id}sc" ${dis(disabledAfterBudget)}width:70px" placeholder="Code"></td>
-    <td><input type="text" id="r${id}sn" ${dis(disabledAfterBudget)}width:120px" placeholder="Supplier"></td>
-    <td><input type="number" id="r${id}lt" ${dis(disabledAfterBudget)}width:50px" placeholder="14"></td>
-    <td><select id="r${id}cy" ${dis(disabledAfterBudget)}width:65px"><option>THB</option><option>USD</option><option>JPY</option><option>EUR</option></select></td>
-    <td><input type="number" id="r${id}pr" ${dis(disabledAfterBudget)}width:75px" placeholder="0"></td>
-    <td><input type="number" id="r${id}mq" ${dis(disabledAfterBudget)}width:50px" value="1"></td>
+    <td><input type="text" id="r${id}gc" ${dis(dab)}width:80px" placeholder="GTAP Code"></td>
+    <td><input type="text" id="r${id}gn" ${dis(dab)}width:120px" placeholder="GTAP Name"></td>
+    <td style="text-align:center"><input type="radio" name="r${id}no" id="r${id}nw" value="P" checked ${dab?'disabled':''}></td>
+    <td style="text-align:center"><input type="radio" name="r${id}no" id="r${id}od" value="O" ${dab?'disabled':''}></td>
+    <td><input type="text" id="r${id}sc" ${dis(dab)}width:70px" placeholder="Code"></td>
+    <td><input type="text" id="r${id}sn" ${dis(dab)}width:120px" placeholder="Supplier"></td>
+    <td><input type="number" id="r${id}lt" ${dis(dab)}width:50px" placeholder="14"></td>
+    <td><select id="r${id}cy" ${dis(dab)}width:65px"><option>THB</option><option>USD</option><option>JPY</option><option>EUR</option></select></td>
+    <td><input type="number" id="r${id}pf" ${dis(dab)}width:60px" placeholder="1" value="1" step="0.01"></td>
+    <td><input type="number" id="r${id}pr" ${dis(dab)}width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
+    <td><input type="number" id="r${id}cr" style="width:65px;background:#f8fafc;color:#475569" readonly placeholder="Auto"></td>
+    <td><input type="number" id="r${id}slp" ${dis(dab)}width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
+    <td><select id="r${id}bi" ${dis(dab)}width:65px"><option value="">-</option><option value="Y">Yes</option><option value="N">No</option></select></td>
+    <td><input type="text" id="r${id}rc" ${dis(dab)}width:130px" placeholder="Root cause (Cost>100%)"></td>
+    <td><input type="text" id="r${id}os" ${dis(dab)}width:80px" placeholder="Over Spec."></td>
+    <td><input type="number" id="r${id}mq" ${dis(dab)}width:50px" value="1"></td>
     <td><select id="r${id}sr" ${dis(disabledRemark)}width:65px"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></td>
     <td><input type="text" id="r${id}rm" ${dis(disabledRemark)}width:90px" placeholder="หมายเหตุ"></td>
     <td><button class="btn btn-sm btn-danger btn-icon" onclick="delRow(${id})"><i class="ti ti-trash"></i></button></td>
@@ -911,7 +926,7 @@ function delRow(id) {
   document.getElementById(`pr-${id}`)?.remove();
   rowIds = rowIds.filter(x=>x!==id);
   if (!rowIds.length) {
-    document.getElementById('prod-body').innerHTML = `<tr id="empty-row"><td colspan="20" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>`;
+    document.getElementById('prod-body').innerHTML = `<tr id="empty-row"><td colspan="29" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>`;
   }
   document.querySelectorAll('#prod-body tr:not(#empty-row)').forEach((tr,i)=>{ const f=tr.querySelector('td'); if(f) f.textContent=i+1; });
 }
@@ -919,11 +934,23 @@ function delRow(id) {
 function getRows() {
   return rowIds.map(id=>({
     model:V(`r${id}m`), partNo:V(`r${id}p`), name:V(`r${id}n`), qty:V(`r${id}q`),
-    unit:V(`r${id}u`), budget:V(`r${id}b`), gtapCode:V(`r${id}gc`), gtapName:V(`r${id}gn`),
-    newOld:V(`r${id}no`), supCode:V(`r${id}sc`), supName:V(`r${id}sn`), leadTime:V(`r${id}lt`),
-    currency:V(`r${id}cy`), price:V(`r${id}pr`), moq:V(`r${id}mq`), remark:V(`r${id}rm`),
-    sample:V(`r${id}sr`), specUrl:V(`r${id}sp`)
+    unit:V(`r${id}u`), qtyBox:V(`r${id}qb`), purUnit:V(`r${id}pu`),
+    budget:V(`r${id}b`), gtapCode:V(`r${id}gc`), gtapName:V(`r${id}gn`),
+    newOld:(()=>{const el=document.querySelector(`input[name="r${id}no"]:checked`);return el?el.value:'P';})(),
+    supCode:V(`r${id}sc`), supName:V(`r${id}sn`), leadTime:V(`r${id}lt`),
+    currency:V(`r${id}cy`), priceFactor:V(`r${id}pf`), price:V(`r${id}pr`),
+    costRatio:V(`r${id}cr`), salePrice:V(`r${id}slp`), boi:V(`r${id}bi`),
+    rootCause:V(`r${id}rc`), overSpec:V(`r${id}os`),
+    moq:V(`r${id}mq`), sample:V(`r${id}sr`), remark:V(`r${id}rm`),
+    specUrl:V(`r${id}sp`)
   }));
+}
+
+function calcCostRatio(id) {
+  const purPrice  = parseFloat(document.getElementById(`r${id}pr`)?.value) || 0;
+  const salePrice = parseFloat(document.getElementById(`r${id}slp`)?.value) || 0;
+  const el = document.getElementById(`r${id}cr`);
+  if (el) el.value = salePrice > 0 ? (purPrice / salePrice * 100).toFixed(2) : '';
 }
 
 function setSpecDisplay(id, url, origName) {
@@ -1002,7 +1029,7 @@ function clearForm() {
   document.getElementById('f-pay').value='';
   document.getElementById('f-email').value = CU?.email || '';
   document.querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=false);
-  document.getElementById('prod-body').innerHTML=`<tr id="empty-row"><td colspan="20" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>`;
+  document.getElementById('prod-body').innerHTML=`<tr id="empty-row"><td colspan="29" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>`;
   rowIds=[]; genDoc();
 }
 
@@ -1336,18 +1363,27 @@ async function importExcel(file) {
     pv('n',  p.name);
     pv('q',  p.qty);
     pv('u',  p.unit);
+    pv('qb', p.qtyBox);
+    pv('pu', p.purUnit);
     pv('b',  p.budget);
     pv('gc', p.gtapCode);
     pv('gn', p.gtapName);
-    pv('no', p.newOld);
+    const nwEl = document.querySelector(`input[name="r${id}no"][value="${p.newOld||'P'}"]`);
+    if (nwEl) nwEl.checked = true;
     pv('sc', p.supCode);
     pv('sn', p.supName);
     pv('lt', p.leadTime);
     pv('cy', p.currency?.split('/')[0]?.trim() || 'THB');
+    pv('pf', p.priceFactor || '1');
     pv('pr', p.price);
+    pv('slp', p.salePrice);
+    calcCostRatio(id);
+    pv('bi', p.boi);
+    pv('rc', p.rootCause);
+    pv('os', p.overSpec);
     pv('mq', p.moq);
-    pv('rm', p.remark);
     pv('sr', p.sample);
+    pv('rm', p.remark);
     if (p.specUrl) setSpecDisplay(id, p.specUrl);
   }
 
@@ -1365,12 +1401,21 @@ function buildWB(reqs) {
       ['User Name',r.userName,'','Department',r.dept,'','Section',r.section],
       ['Email',r.email,'','Ext.',r.ext],[],
       ['Purpose',r.purpose],['Order Type',r.orderType],['Purpose Desc.',r.purposeDesc],['Product Type',r.productType],[],
-      ['No.','Model','Product No.','Product Name','Qty','Unit','Spec URL','Budget','GTAP Code','GTAP Name','P/O','Sup.Code','Supplier','Lead(Day)','Currency','Price','MOQ','Sample Req.','Remark'],
+      ['No.','Model','Product No.','Product Name','Qty','Unit',"Q'ty/Box",'Pur.Unit','Spec URL',
+       'Budget','GTAP Code','GTAP Name','New','Old','Sup.Code','Supplier','Lead(Day)','Currency',
+       'Price Con.Factor','PUR Price','Cost Ratio(%)','Sale Price','BOI','Root Cause of Loss Profit','Over Spec.','MOQ','Sample Req.','Remark'],
     ];
-    (r.products||[]).forEach((p,i)=>rows.push([i+1,p.model,p.partNo,p.name,p.qty,p.unit,p.specUrl,p.budget,p.gtapCode,p.gtapName,p.newOld,p.supCode,p.supName,p.leadTime,p.currency,p.price,p.moq,p.sample,p.remark]));
+    (r.products||[]).forEach((p,i)=>rows.push([
+      i+1,p.model,p.partNo,p.name,p.qty,p.unit,p.qtyBox,p.purUnit,p.specUrl,
+      p.budget,p.gtapCode,p.gtapName,
+      p.newOld==='P'?'P':'', p.newOld==='O'?'O':'',
+      p.supCode,p.supName,p.leadTime,p.currency,
+      p.priceFactor,p.price,p.costRatio,p.salePrice,p.boi,p.rootCause,p.overSpec,
+      p.moq,p.sample,p.remark
+    ]));
     rows.push([]); rows.push(['Remark',r.remark]); rows.push(['Payment',r.payment]);
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[10,12,14,20,6,6,30,8,10,22,6,10,18,8,6,10,6,8,16].map(w=>({wch:w}));
+    ws['!cols']=[6,12,14,20,6,6,8,8,30,8,10,20,5,5,10,18,8,8,10,10,10,10,6,25,10,6,8,16].map(w=>({wch:w}));
     XLSX.utils.book_append_sheet(wb, ws, (r.docNo||'Sheet').replace(/[:\\/?*\[\]]/g,'-').slice(0,31));
   });
   return wb;

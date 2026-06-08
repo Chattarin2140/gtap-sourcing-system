@@ -144,10 +144,13 @@ def init_db():
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
             seq INTEGER, model TEXT, part_no TEXT, name TEXT,
-            qty TEXT, unit TEXT, budget TEXT, gtap_code TEXT, gtap_name TEXT,
+            qty TEXT, unit TEXT, qty_box TEXT, pur_unit TEXT,
+            budget TEXT, gtap_code TEXT, gtap_name TEXT,
             new_old TEXT, sup_code TEXT, sup_name TEXT,
-            lead_time TEXT, currency TEXT, price TEXT, moq TEXT, prod_remark TEXT,
-            sample TEXT, spec_url TEXT
+            lead_time TEXT, currency TEXT,
+            price_factor TEXT, price TEXT, cost_ratio TEXT, sale_price TEXT,
+            boi TEXT, root_cause TEXT, over_spec TEXT,
+            moq TEXT, prod_remark TEXT, sample TEXT, spec_url TEXT
         );
         CREATE TABLE IF NOT EXISTS activity_log (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -167,8 +170,9 @@ def init_db():
           ('mkt',    'mkt123',   'Marketing สมศรี', 'mkt@tgt.co.th',    'marketing',  'MKT'),
           ('viewer', 'view123',  'Viewer ทดสอบ',    'viewer@tgt.co.th', 'viewer',     'QA');
     ''')
-    # Migrate products table — add sample/spec_url if missing
-    for col in ('sample', 'spec_url'):
+    # Migrate products table — add new columns if missing
+    for col in ('sample', 'spec_url', 'qty_box', 'pur_unit', 'price_factor',
+                'cost_ratio', 'sale_price', 'boi', 'root_cause', 'over_spec'):
         try:
             c.execute(f'ALTER TABLE products ADD COLUMN {col} TEXT DEFAULT ""')
         except Exception:
@@ -483,13 +487,18 @@ def create_request():
         for i, p in enumerate(d.get('products', [])):
             c.execute(
                 '''INSERT INTO products
-                   (request_id,seq,model,part_no,name,qty,unit,budget,gtap_code,gtap_name,
-                    new_old,sup_code,sup_name,lead_time,currency,price,moq,prod_remark,sample,spec_url)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                   (request_id,seq,model,part_no,name,qty,unit,qty_box,pur_unit,
+                    budget,gtap_code,gtap_name,new_old,sup_code,sup_name,lead_time,currency,
+                    price_factor,price,cost_ratio,sale_price,boi,root_cause,over_spec,
+                    moq,prod_remark,sample,spec_url)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                 (req_id, i+1, p.get('model'), p.get('partNo'), p.get('name'), p.get('qty'),
-                 p.get('unit'), p.get('budget'), p.get('gtapCode'), p.get('gtapName'), p.get('newOld'),
+                 p.get('unit'), p.get('qtyBox',''), p.get('purUnit',''),
+                 p.get('budget'), p.get('gtapCode'), p.get('gtapName'), p.get('newOld'),
                  p.get('supCode'), p.get('supName'), p.get('leadTime'), p.get('currency'),
-                 p.get('price'), p.get('moq'), p.get('remark'), p.get('sample',''), p.get('specUrl',''))
+                 p.get('priceFactor','1'), p.get('price'), p.get('costRatio',''), p.get('salePrice',''),
+                 p.get('boi',''), p.get('rootCause',''), p.get('overSpec',''),
+                 p.get('moq'), p.get('remark'), p.get('sample',''), p.get('specUrl',''))
             )
         c.execute('SELECT * FROM requests WHERE id=?', (req_id,))
         r = to_dict(c.fetchone())
@@ -523,13 +532,19 @@ def create_request():
             sb.table('products').insert([{
                 'request_id': req_id, 'seq': i+1,
                 'model': p.get('model'), 'part_no': p.get('partNo'), 'name': p.get('name'),
-                'qty': p.get('qty'), 'unit': p.get('unit'), 'budget': p.get('budget'),
+                'qty': p.get('qty'), 'unit': p.get('unit'),
+                'qty_box': p.get('qtyBox',''), 'pur_unit': p.get('purUnit',''),
+                'budget': p.get('budget'),
                 'gtap_code': p.get('gtapCode'), 'gtap_name': p.get('gtapName'),
                 'new_old': p.get('newOld'), 'sup_code': p.get('supCode'),
                 'sup_name': p.get('supName'), 'lead_time': p.get('leadTime'),
-                'currency': p.get('currency'), 'price': p.get('price'),
+                'currency': p.get('currency'),
+                'price_factor': p.get('priceFactor','1'), 'price': p.get('price'),
+                'cost_ratio': p.get('costRatio',''), 'sale_price': p.get('salePrice',''),
+                'boi': p.get('boi',''), 'root_cause': p.get('rootCause',''),
+                'over_spec': p.get('overSpec',''),
                 'moq': p.get('moq'), 'prod_remark': p.get('remark'),
-                'sample': p.get('sample', ''), 'spec_url': p.get('specUrl', ''),
+                'sample': p.get('sample',''), 'spec_url': p.get('specUrl',''),
             } for i, p in enumerate(d.get('products', []))]).execute()
     log(f'สร้าง Request {doc_no}', 'ok', d.get('createdBy', ''))
     notify_new_request(r)
