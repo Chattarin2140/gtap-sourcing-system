@@ -141,6 +141,9 @@ tbody tr:last-child td{border-bottom:none}
 tbody tr:hover td{background:#f8fafc}
 td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60px}
 .nc{text-align:center;font-weight:600;color:var(--muted)}
+#prod-table.hide-gtap .col-gtap{display:none}
+#prod-table.hide-mid .col-mid{display:none}
+#prod-table.hide-remark .col-remark{display:none}
 
 /* BTN */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text);transition:all .15s;white-space:nowrap;font-family:inherit}
@@ -422,14 +425,16 @@ td input,td select{padding:4px 6px;font-size:12px;border-radius:5px;min-width:60
               <button class="btn btn-accent btn-sm" onclick="addRow()"><i class="ti ti-plus"></i> Add Item</button>
             </div>
             <div class="tbl-wrap">
-              <table><thead><tr>
+              <table id="prod-table"><thead><tr>
                 <th>No.</th><th>Model</th><th>Product No.</th><th>Product Name</th><th>Qty</th><th>Unit</th>
                 <th>Q'ty/Box</th><th>Pur. Unit</th><th>Spec / รูป</th>
-                <th>Budget No.</th><th>GTAP Code</th><th>GTAP Name</th><th>New</th><th>Old</th><th>Sup. Code</th>
-                <th>Supplier Name</th><th>Lead Time</th><th>Currency</th>
-                <th>Price Con. Factor</th><th>PUR Price</th><th>Cost Ratio(%)</th><th>Sale Price</th>
-                <th>BOI</th><th>Root Cause of Loss Profit</th><th>Over Spec.</th>
-                <th>MOQ</th><th>Sample</th><th>Remark</th><th></th>
+                <th>Budget No.</th>
+                <th class="col-gtap">GTAP Code</th><th class="col-gtap">GTAP Name</th><th class="col-gtap">New</th><th class="col-gtap">Old</th><th class="col-gtap">Sup. Code</th>
+                <th class="col-gtap">Supplier Name</th><th class="col-gtap">Lead Time</th><th class="col-gtap">Currency</th>
+                <th class="col-gtap">Price Con. Factor</th><th class="col-gtap">PUR Price</th>
+                <th class="col-mid">Cost Ratio(%)</th><th class="col-mid">Sale Price</th>
+                <th class="col-mid">BOI</th><th class="col-mid">Root Cause of Loss Profit</th><th class="col-mid">Over Spec.</th>
+                <th class="col-mid">MOQ</th><th class="col-remark">Sample</th><th class="col-remark">Remark</th><th></th>
               </tr></thead>
               <tbody id="prod-body">
                 <tr id="empty-row"><td colspan="29" class="empty" style="padding:24px"><i class="ti ti-package-off"></i><p>กด Add Item</p></td></tr>
@@ -801,6 +806,7 @@ function applySession(found) {
   document.getElementById('f-uname').value = found.name;
   document.getElementById('f-dept').value = found.dept || '';
   document.getElementById('f-email').value = found.email || '';
+  applyColVisibility();
   updateBadge(); renderDash(); renderCharts();
 }
 
@@ -882,11 +888,6 @@ function addRow() {
   const empty = document.getElementById('empty-row');
   if (empty) empty.remove();
   const role = CU?.role;
-  // Buyer: No.→MOQ | Marketing: CostRatio→Remark | Accounting/Viewer: No.→Budget only | Admin: all
-  const dGTAP   = role !== 'buyer'     && role !== 'admin';                            // GTAP Code → PUR Price
-  const dMid    = role !== 'buyer'     && role !== 'marketing' && role !== 'admin';    // Sale Price → MOQ
-  const dRemark = role !== 'marketing' && role !== 'admin';                            // Sample, Remark
-  const dis = (flag) => flag ? 'disabled style="background:#f1f5f9;color:#94a3b8;cursor:not-allowed;' : 'style="';
   const specCell = `<div style="display:flex;align-items:center;gap:4px"><button type="button" class="btn btn-sm" onclick="document.getElementById('r${id}spf').click()" style="padding:3px 8px;font-size:12px" title="แนบ PDF/รูป"><i class="ti ti-paperclip"></i></button><span id="r${id}sp-lbl" style="font-size:11px;color:var(--muted);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><input type="file" id="r${id}spf" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp" style="display:none" onchange="uploadSpec(${id},this)"><input type="hidden" id="r${id}sp" value=""></div>`;
   const tr = document.createElement('tr');
   tr.id = `pr-${id}`;
@@ -901,27 +902,37 @@ function addRow() {
     <td><input type="text" id="r${id}pu" style="width:60px" placeholder="Unit"></td>
     <td style="min-width:110px;padding:6px 4px">${specCell}</td>
     <td><input type="text" id="r${id}b" style="width:70px" placeholder="Budget"></td>
-    <td><input type="text" id="r${id}gc" ${dis(dGTAP)}width:80px" placeholder="GTAP Code"></td>
-    <td><input type="text" id="r${id}gn" ${dis(dGTAP)}width:120px" placeholder="GTAP Name"></td>
-    <td style="text-align:center"><input type="radio" name="r${id}no" id="r${id}nw" value="P" checked ${dGTAP?'disabled':''}></td>
-    <td style="text-align:center"><input type="radio" name="r${id}no" id="r${id}od" value="O" ${dGTAP?'disabled':''}></td>
-    <td><input type="text" id="r${id}sc" ${dis(dGTAP)}width:70px" placeholder="Code"></td>
-    <td><input type="text" id="r${id}sn" ${dis(dGTAP)}width:120px" placeholder="Supplier"></td>
-    <td><input type="number" id="r${id}lt" ${dis(dGTAP)}width:50px" placeholder="14"></td>
-    <td><select id="r${id}cy" ${dis(dGTAP)}width:65px"><option>THB</option><option>USD</option><option>JPY</option><option>EUR</option></select></td>
-    <td><input type="number" id="r${id}pf" ${dis(dGTAP)}width:60px" placeholder="1" value="1" step="0.01"></td>
-    <td><input type="number" id="r${id}pr" ${dis(dGTAP)}width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
-    <td><input type="number" id="r${id}cr" style="width:65px;background:#f8fafc;color:#475569" readonly placeholder="Auto"></td>
-    <td><input type="number" id="r${id}slp" ${dis(dMid)}width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
-    <td><select id="r${id}bi" ${dis(dMid)}width:65px"><option value="">-</option><option value="Y">Yes</option><option value="N">No</option></select></td>
-    <td><input type="text" id="r${id}rc" ${dis(dMid)}width:130px" placeholder="Root cause (Cost>100%)"></td>
-    <td><input type="text" id="r${id}os" ${dis(dMid)}width:80px" placeholder="Over Spec."></td>
-    <td><input type="number" id="r${id}mq" ${dis(dMid)}width:50px" value="1"></td>
-    <td><select id="r${id}sr" ${dis(dRemark)}width:65px"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></td>
-    <td><input type="text" id="r${id}rm" ${dis(dRemark)}width:90px" placeholder="หมายเหตุ"></td>
+    <td class="col-gtap"><input type="text" id="r${id}gc" style="width:80px" placeholder="GTAP Code"></td>
+    <td class="col-gtap"><input type="text" id="r${id}gn" style="width:120px" placeholder="GTAP Name"></td>
+    <td class="col-gtap" style="text-align:center"><input type="radio" name="r${id}no" id="r${id}nw" value="P" checked></td>
+    <td class="col-gtap" style="text-align:center"><input type="radio" name="r${id}no" id="r${id}od" value="O"></td>
+    <td class="col-gtap"><input type="text" id="r${id}sc" style="width:70px" placeholder="Code"></td>
+    <td class="col-gtap"><input type="text" id="r${id}sn" style="width:120px" placeholder="Supplier"></td>
+    <td class="col-gtap"><input type="number" id="r${id}lt" style="width:50px" placeholder="14"></td>
+    <td class="col-gtap"><select id="r${id}cy" style="width:65px"><option>THB</option><option>USD</option><option>JPY</option><option>EUR</option></select></td>
+    <td class="col-gtap"><input type="number" id="r${id}pf" style="width:60px" placeholder="1" value="1" step="0.01"></td>
+    <td class="col-gtap"><input type="number" id="r${id}pr" style="width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
+    <td class="col-mid"><input type="number" id="r${id}cr" style="width:65px;background:#f8fafc;color:#475569" readonly placeholder="Auto"></td>
+    <td class="col-mid"><input type="number" id="r${id}slp" style="width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
+    <td class="col-mid"><select id="r${id}bi" style="width:65px"><option value="">-</option><option value="Y">Yes</option><option value="N">No</option></select></td>
+    <td class="col-mid"><input type="text" id="r${id}rc" style="width:130px" placeholder="Root cause (Cost>100%)"></td>
+    <td class="col-mid"><input type="text" id="r${id}os" style="width:80px" placeholder="Over Spec."></td>
+    <td class="col-mid"><input type="number" id="r${id}mq" style="width:50px" value="1"></td>
+    <td class="col-remark"><select id="r${id}sr" style="width:65px"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></td>
+    <td class="col-remark"><input type="text" id="r${id}rm" style="width:90px" placeholder="หมายเหตุ"></td>
     <td><button class="btn btn-sm btn-danger btn-icon" onclick="delRow(${id})"><i class="ti ti-trash"></i></button></td>
   `;
   tbody.appendChild(tr);
+  applyColVisibility();
+}
+
+function applyColVisibility() {
+  const role = CU?.role;
+  const tbl = document.getElementById('prod-table');
+  if (!tbl) return;
+  tbl.classList.toggle('hide-gtap',   role !== 'buyer' && role !== 'admin');
+  tbl.classList.toggle('hide-mid',    role !== 'buyer' && role !== 'marketing' && role !== 'admin');
+  tbl.classList.toggle('hide-remark', role !== 'marketing' && role !== 'admin');
 }
 
 function delRow(id) {
