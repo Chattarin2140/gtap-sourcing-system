@@ -880,14 +880,14 @@ function addRow() {
   const empty = document.getElementById('empty-row');
   if (empty) empty.remove();
   const role = CU?.role;
-  // accounting: up to Budget No. only; buyer: up to MOQ; others: all fields
-  const disabledAfterBudget = role === 'accounting';
-  const disabledRemark      = role === 'accounting' || role === 'buyer';
+  // Buyer: No.→MOQ | Marketing: CostRatio→Remark | Accounting/Viewer: No.→Budget only | Admin: all
+  const dGTAP   = role !== 'buyer'     && role !== 'admin';                            // GTAP Code → PUR Price
+  const dMid    = role !== 'buyer'     && role !== 'marketing' && role !== 'admin';    // Sale Price → MOQ
+  const dRemark = role !== 'marketing' && role !== 'admin';                            // Sample, Remark
   const dis = (flag) => flag ? 'disabled style="background:#f1f5f9;color:#94a3b8;cursor:not-allowed;' : 'style="';
   const specCell = `<div style="display:flex;align-items:center;gap:4px"><button type="button" class="btn btn-sm" onclick="document.getElementById('r${id}spf').click()" style="padding:3px 8px;font-size:12px" title="แนบ PDF/รูป"><i class="ti ti-paperclip"></i></button><span id="r${id}sp-lbl" style="font-size:11px;color:var(--muted);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><input type="file" id="r${id}spf" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp" style="display:none" onchange="uploadSpec(${id},this)"><input type="hidden" id="r${id}sp" value=""></div>`;
   const tr = document.createElement('tr');
   tr.id = `pr-${id}`;
-  const dab = disabledAfterBudget;
   tr.innerHTML = `
     <td class="nc">${rowIds.length}</td>
     <td><input type="text" id="r${id}m" style="width:65px" placeholder="Model"></td>
@@ -899,24 +899,24 @@ function addRow() {
     <td><input type="text" id="r${id}pu" style="width:60px" placeholder="Unit"></td>
     <td style="min-width:110px;padding:6px 4px">${specCell}</td>
     <td><input type="text" id="r${id}b" style="width:70px" placeholder="Budget"></td>
-    <td><input type="text" id="r${id}gc" ${dis(dab)}width:80px" placeholder="GTAP Code"></td>
-    <td><input type="text" id="r${id}gn" ${dis(dab)}width:120px" placeholder="GTAP Name"></td>
-    <td style="text-align:center"><input type="radio" name="r${id}no" id="r${id}nw" value="P" checked ${dab?'disabled':''}></td>
-    <td style="text-align:center"><input type="radio" name="r${id}no" id="r${id}od" value="O" ${dab?'disabled':''}></td>
-    <td><input type="text" id="r${id}sc" ${dis(dab)}width:70px" placeholder="Code"></td>
-    <td><input type="text" id="r${id}sn" ${dis(dab)}width:120px" placeholder="Supplier"></td>
-    <td><input type="number" id="r${id}lt" ${dis(dab)}width:50px" placeholder="14"></td>
-    <td><select id="r${id}cy" ${dis(dab)}width:65px"><option>THB</option><option>USD</option><option>JPY</option><option>EUR</option></select></td>
-    <td><input type="number" id="r${id}pf" ${dis(dab)}width:60px" placeholder="1" value="1" step="0.01"></td>
-    <td><input type="number" id="r${id}pr" ${dis(dab)}width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
+    <td><input type="text" id="r${id}gc" ${dis(dGTAP)}width:80px" placeholder="GTAP Code"></td>
+    <td><input type="text" id="r${id}gn" ${dis(dGTAP)}width:120px" placeholder="GTAP Name"></td>
+    <td style="text-align:center"><input type="radio" name="r${id}no" id="r${id}nw" value="P" checked ${dGTAP?'disabled':''}></td>
+    <td style="text-align:center"><input type="radio" name="r${id}no" id="r${id}od" value="O" ${dGTAP?'disabled':''}></td>
+    <td><input type="text" id="r${id}sc" ${dis(dGTAP)}width:70px" placeholder="Code"></td>
+    <td><input type="text" id="r${id}sn" ${dis(dGTAP)}width:120px" placeholder="Supplier"></td>
+    <td><input type="number" id="r${id}lt" ${dis(dGTAP)}width:50px" placeholder="14"></td>
+    <td><select id="r${id}cy" ${dis(dGTAP)}width:65px"><option>THB</option><option>USD</option><option>JPY</option><option>EUR</option></select></td>
+    <td><input type="number" id="r${id}pf" ${dis(dGTAP)}width:60px" placeholder="1" value="1" step="0.01"></td>
+    <td><input type="number" id="r${id}pr" ${dis(dGTAP)}width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
     <td><input type="number" id="r${id}cr" style="width:65px;background:#f8fafc;color:#475569" readonly placeholder="Auto"></td>
-    <td><input type="number" id="r${id}slp" ${dis(dab)}width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
-    <td><select id="r${id}bi" ${dis(dab)}width:65px"><option value="">-</option><option value="Y">Yes</option><option value="N">No</option></select></td>
-    <td><input type="text" id="r${id}rc" ${dis(dab)}width:130px" placeholder="Root cause (Cost>100%)"></td>
-    <td><input type="text" id="r${id}os" ${dis(dab)}width:80px" placeholder="Over Spec."></td>
-    <td><input type="number" id="r${id}mq" ${dis(dab)}width:50px" value="1"></td>
-    <td><select id="r${id}sr" ${dis(disabledRemark)}width:65px"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></td>
-    <td><input type="text" id="r${id}rm" ${dis(disabledRemark)}width:90px" placeholder="หมายเหตุ"></td>
+    <td><input type="number" id="r${id}slp" ${dis(dMid)}width:75px" placeholder="0" oninput="calcCostRatio(${id})"></td>
+    <td><select id="r${id}bi" ${dis(dMid)}width:65px"><option value="">-</option><option value="Y">Yes</option><option value="N">No</option></select></td>
+    <td><input type="text" id="r${id}rc" ${dis(dMid)}width:130px" placeholder="Root cause (Cost>100%)"></td>
+    <td><input type="text" id="r${id}os" ${dis(dMid)}width:80px" placeholder="Over Spec."></td>
+    <td><input type="number" id="r${id}mq" ${dis(dMid)}width:50px" value="1"></td>
+    <td><select id="r${id}sr" ${dis(dRemark)}width:65px"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></td>
+    <td><input type="text" id="r${id}rm" ${dis(dRemark)}width:90px" placeholder="หมายเหตุ"></td>
     <td><button class="btn btn-sm btn-danger btn-icon" onclick="delRow(${id})"><i class="ti ti-trash"></i></button></td>
   `;
   tbody.appendChild(tr);
