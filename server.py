@@ -6,6 +6,7 @@ Flask + Supabase REST API (production) / SQLite (local dev) + Email Notification
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from functools import wraps
+from werkzeug.utils import secure_filename
 import os, smtplib, hmac as _hmac, hashlib, base64, json, time
 from datetime import datetime
 from email.mime.text import MIMEText
@@ -14,6 +15,9 @@ import bcrypt as _bcrypt
 
 app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
 CORS(app)
+
+UPLOAD_FOLDER    = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+ALLOWED_SPEC_EXT = {'pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'}
 
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -142,7 +146,8 @@ def init_db():
             seq INTEGER, model TEXT, part_no TEXT, name TEXT,
             qty TEXT, unit TEXT, budget TEXT, gtap_code TEXT, gtap_name TEXT,
             new_old TEXT, sup_code TEXT, sup_name TEXT,
-            lead_time TEXT, currency TEXT, price TEXT, moq TEXT, prod_remark TEXT
+            lead_time TEXT, currency TEXT, price TEXT, moq TEXT, prod_remark TEXT,
+            sample TEXT, spec_url TEXT
         );
         CREATE TABLE IF NOT EXISTS activity_log (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,6 +167,12 @@ def init_db():
           ('mkt',    'mkt123',   'Marketing สมศรี', 'mkt@tgt.co.th',    'marketing',  'MKT'),
           ('viewer', 'view123',  'Viewer ทดสอบ',    'viewer@tgt.co.th', 'viewer',     'QA');
     ''')
+    # Migrate products table — add sample/spec_url if missing
+    for col in ('sample', 'spec_url'):
+        try:
+            c.execute(f'ALTER TABLE products ADD COLUMN {col} TEXT DEFAULT ""')
+        except Exception:
+            pass
     # Migrate plain-text passwords → bcrypt (runs on every startup, safe due to '$2' check)
     c.execute("SELECT id, password FROM users WHERE password NOT LIKE '$2%'")
     for row in c.fetchall():
@@ -473,12 +484,12 @@ def create_request():
             c.execute(
                 '''INSERT INTO products
                    (request_id,seq,model,part_no,name,qty,unit,budget,gtap_code,gtap_name,
-                    new_old,sup_code,sup_name,lead_time,currency,price,moq,prod_remark)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    new_old,sup_code,sup_name,lead_time,currency,price,moq,prod_remark,sample,spec_url)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                 (req_id, i+1, p.get('model'), p.get('partNo'), p.get('name'), p.get('qty'),
                  p.get('unit'), p.get('budget'), p.get('gtapCode'), p.get('gtapName'), p.get('newOld'),
                  p.get('supCode'), p.get('supName'), p.get('leadTime'), p.get('currency'),
-                 p.get('price'), p.get('moq'), p.get('remark'))
+                 p.get('price'), p.get('moq'), p.get('remark'), p.get('sample',''), p.get('specUrl',''))
             )
         c.execute('SELECT * FROM requests WHERE id=?', (req_id,))
         r = to_dict(c.fetchone())
@@ -518,6 +529,7 @@ def create_request():
                 'sup_name': p.get('supName'), 'lead_time': p.get('leadTime'),
                 'currency': p.get('currency'), 'price': p.get('price'),
                 'moq': p.get('moq'), 'prod_remark': p.get('remark'),
+                'sample': p.get('sample', ''), 'spec_url': p.get('specUrl', ''),
             } for i, p in enumerate(d.get('products', []))]).execute()
     log(f'สร้าง Request {doc_no}', 'ok', d.get('createdBy', ''))
     notify_new_request(r)
@@ -944,6 +956,26 @@ def export_excel_all():
     fname = f'GTAP_All_{date.today()}.xlsx'
     return Response(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+
+@app.route('/api/upload-spec', methods=['POST'])
+@require_auth()
+def upload_spec():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'No file selected'}), 400
+    ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+    if ext not in ALLOWED_SPEC_EXT:
+        return jsonify({'error': 'ไฟล์ไม่รองรับ (รองรับ PDF, JPG, PNG, GIF, WEBP)'}), 400
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    fname = f'{int(time.time())}_{secure_filename(f.filename)}'
+    f.save(os.path.join(UPLOAD_FOLDER, fname))
+    return jsonify({'url': f'/uploads/{fname}', 'name': f.filename})
+
+@app.route('/uploads/<path:filename>')
+def serve_upload(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 @app.route('/')
 def index():
